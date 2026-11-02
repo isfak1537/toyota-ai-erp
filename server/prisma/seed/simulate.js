@@ -49,6 +49,9 @@ const simulateSeries = (cfg) => {
     reservationRate = 0,
     transfersOut = [],
     transfersIn = [],
+    steer = null,
+    bulk = null,
+    injections = [],
   } = cfg;
 
   const lambdaAt = (d) =>
@@ -117,6 +120,7 @@ const simulateSeries = (cfg) => {
       ref: null,
       reason: null,
       anomalyId: null,
+      anomalyRole: null,
       ...extra,
     });
   };
@@ -210,9 +214,117 @@ const simulateSeries = (cfg) => {
         });
         break;
       }
+      // ---- steering and anomaly injection (SEED-007, SEED-004) ----
+      case "TRIM": {
+        // last-day correction that lands the available stock on the target
+        const quantity = Math.max(0, available() - intent.target);
+
+        if (quantity > 0) {
+          onHand -= quantity;
+          emit(ts, "ISSUE", -quantity, { referenceType: "MANUAL_ISSUE" });
+        }
+        break;
+      }
+      case "INJ_ISSUE": {
+        const quantity = Math.min(intent.quantity, available());
+
+        if (quantity > 0) {
+          onHand -= quantity;
+          emit(ts, "ISSUE", -quantity, {
+            referenceType: "MANUAL_ISSUE",
+            anomalyId: intent.anomalyId,
+            anomalyRole: intent.role ?? null,
+          });
+        }
+        break;
+      }
+      case "INJ_ADJUST": {
+        const quantity = Math.min(-intent.quantity, available());
+
+        if (quantity > 0) {
+          onHand -= quantity;
+          emit(ts, "ADJUSTMENT", -quantity, {
+            referenceType: "MANUAL_ADJUSTMENT",
+            reason: "Stock correction",
+            anomalyId: intent.anomalyId,
+          });
+        }
+        break;
+      }
+      case "INJ_RECEIPT": {
+        onHand += intent.quantity;
+        emit(ts, "RECEIPT", intent.quantity, {
+          referenceType: "MANUAL_RECEIPT",
+          anomalyId: intent.anomalyId,
+        });
+        break;
+      }
       default:
         throw new Error(`Unknown intent ${intent.kind}`);
     }
+  };
+
+  // Steered series (SEED-007): from `suspendFromDay` no new orders are placed
+  // (so every order has arrived by the end), and in the last days the demand is
+  // planned so that the available stock lands exactly on `steer.target`.
+  const planWindow = (d0) => {
+    const dayMsOf = (k) => start0 + k * DAY_MS;
+    let incoming = 0;
+
+    for (let k = d0; k < days; k += 1) {
+      intents[k]
+        .filter((intent) => intent.kind === "ARRIVAL")
+        .forEach((intent) => {
+          incoming += intent.order.quantity;
+        });
+    }
+
+    let expected = 0;
+    const weights = [];
+
+    for (let k = d0; k < days; k += 1) {
+      expected += lambdaAt(k);
+      weights.push(weekdayFactor(dayMsOf(k)) * (0.7 + 0.6 * rng.next()));
+    }
+
+    let toIssue = available() + incoming - steer.target;
+    const minIssue = Math.ceil(0.6 * expected);
+
+    if (toIssue < minIssue) {
+      // not enough stock to run the demand down to the target: a supplier
+      // delivery arrives at the start of the window
+      const option = options[0];
+      const quantity = ceilTo(minIssue - toIssue, option.minimumOrderQty);
+      const arrivalDay = d0 + 1;
+      const arrivalMs = at(dayMsOf(arrivalDay), 3, rng.int(0, 119));
+
+      newOrder({
+        quantity,
+        option,
+        createdMs: arrivalMs - option.leadTimeDays * DAY_MS,
+        arrivalDay,
+        arrivalMs,
+        kind: "TOPUP",
+      });
+      toIssue += quantity;
+    }
+
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+    for (let k = d0; k < days - 1; k += 1) {
+      const share = Math.floor((toIssue * weights[k - d0]) / totalWeight);
+
+      if (share > 0) {
+        const sizes = splitUnits(rng, share, Math.min(share, rng.int(1, 3)));
+        const minutes = sizes.map(() => businessMinute(rng)).sort((a, b) => a - b);
+
+        sizes.forEach((quantity, i) => {
+          add(k, { ts: dayMsOf(k) + minutes[i] * MINUTE_MS, kind: "ISSUE", quantity });
+        });
+      }
+    }
+
+    add(days - 1, { ts: at(dayMsOf(days - 1), 10, 30), kind: "TRIM", target: steer.target });
   };
 
   // Opening stock arrives on the first morning through a purchase order that
@@ -231,36 +343,72 @@ const simulateSeries = (cfg) => {
   for (let d = 0; d < days; d += 1) {
     const dayMs = start0 + d * DAY_MS;
 
-    const demand = rng.poisson(lambdaAt(d));
-
-    if (demand > 0) {
-      const sizes = splitUnits(rng, demand, Math.min(demand, rng.int(1, 3)));
-      const minutes = sizes.map(() => businessMinute(rng)).sort((a, b) => a - b);
-
-      sizes.forEach((quantity, i) => {
-        add(d, { ts: dayMs + minutes[i] * MINUTE_MS, kind: "ISSUE", quantity });
-      });
+    if (steer && d === steer.windowStart) {
+      planWindow(d);
     }
 
-    if (rng.chance(reservationRate)) {
-      add(d, {
-        ts: dayMs + businessMinute(rng) * MINUTE_MS,
-        kind: "RESERVE",
-        quantity: rng.int(2, Math.max(3, Math.round(base * 4))),
-        holdDays: rng.int(3, 10),
-        releaseMinute: businessMinute(rng),
-      });
+    const planned = steer && d >= steer.windowStart;
+
+    if (!planned) {
+      const demand = rng.poisson(lambdaAt(d));
+
+      if (demand > 0) {
+        const sizes = splitUnits(rng, demand, Math.min(demand, rng.int(1, 3)));
+        const minutes = sizes.map(() => businessMinute(rng)).sort((a, b) => a - b);
+
+        sizes.forEach((quantity, i) => {
+          add(d, { ts: dayMs + minutes[i] * MINUTE_MS, kind: "ISSUE", quantity });
+        });
+      }
+
+      if (rng.chance(reservationRate)) {
+        add(d, {
+          ts: dayMs + businessMinute(rng) * MINUTE_MS,
+          kind: "RESERVE",
+          quantity: rng.int(2, Math.max(3, Math.round(base * 4))),
+          holdDays: rng.int(3, 10),
+          releaseMinute: businessMinute(rng),
+        });
+      }
+
+      if (rng.chance(0.012)) {
+        const size = rng.int(1, Math.max(2, Math.round(base * 2)));
+
+        add(d, {
+          ts: dayMs + businessMinute(rng) * MINUTE_MS,
+          kind: "ADJUST",
+          quantity: rng.chance(0.6) ? -size : size,
+        });
+      }
     }
 
-    if (rng.chance(0.012)) {
-      const size = rng.int(1, Math.max(2, Math.round(base * 2)));
+    // injected anomalies are fully specified by the builder (own RNG), so the
+    // series stream is untouched and identical to the un-injected run up to
+    // the injection moment
+    injections
+      .filter((injection) => injection.day === d)
+      .forEach((injection) => {
+        const ts = dayMs + injection.minute * MINUTE_MS;
 
-      add(d, {
-        ts: dayMs + businessMinute(rng) * MINUTE_MS,
-        kind: "ADJUST",
-        quantity: rng.chance(0.6) ? -size : size,
+        switch (injection.type) {
+          case "SPIKE_ISSUE":
+          case "OFF_HOURS_ISSUE":
+            add(d, { ts, kind: "INJ_ISSUE", quantity: injection.quantity, anomalyId: injection.id });
+            break;
+          case "DUPLICATE_ISSUE":
+            add(d, { ts, kind: "INJ_ISSUE", quantity: injection.quantity, anomalyId: injection.id, role: "original" });
+            add(d, { ts: ts + 3 * MINUTE_MS, kind: "INJ_ISSUE", quantity: injection.quantity, anomalyId: injection.id, role: "duplicate" });
+            break;
+          case "NEGATIVE_ADJUSTMENT":
+            add(d, { ts, kind: "INJ_ADJUST", quantity: -injection.quantity, anomalyId: injection.id });
+            break;
+          case "MANUAL_RECEIPT":
+            add(d, { ts, kind: "INJ_RECEIPT", quantity: injection.quantity, anomalyId: injection.id });
+            break;
+          default:
+            throw new Error(`Unknown injection ${injection.type}`);
+        }
       });
-    }
 
     transfersOut
       .filter((transfer) => transfer.day === d)
@@ -287,7 +435,26 @@ const simulateSeries = (cfg) => {
       .reduce((sum, order) => sum + order.quantity, 0);
     const position = available() + onOrder;
 
-    if (position <= rop) {
+    if (bulk && d === bulk.day) {
+      // one large purchase ahead of the end (SEED-007 overstock scenario)
+      const option = options[0];
+      const target = Math.ceil(bulk.coverDays * base * (1 + trend / 2));
+      const quantity = Math.max(
+        option.minimumOrderQty,
+        ceilTo(target - position, option.minimumOrderQty)
+      );
+      const arrivalDay = d + option.leadTimeDays + 1;
+
+      newOrder({
+        quantity,
+        option,
+        createdMs: at(dayMs, 10, 0),
+        arrivalDay,
+        arrivalMs: at(start0 + arrivalDay * DAY_MS, 3, 30),
+        kind: "BULK",
+        notes: "Bulk purchase (synthetic overstock scenario)",
+      });
+    } else if (position <= rop && !(steer && d >= steer.suspendFromDay)) {
       const option =
         options.length > 1 && rng.chance(0.15)
           ? options[1 + rng.int(0, options.length - 2)]
