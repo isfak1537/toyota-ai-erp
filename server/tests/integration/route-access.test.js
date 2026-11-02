@@ -34,6 +34,8 @@ const PER_ROUTE_WRITES = {
   "POST /anomalies/sync": roles.ANOMALY_REVIEW,
   "POST /anomalies/:id/review": roles.ANOMALY_REVIEW,
   "POST /models/retrain": roles.ADMIN_ONLY,
+  "POST /suggestions/:id/explain": roles.PROCUREMENT,
+  "POST /anomalies/:id/explain": roles.ANOMALY_REVIEW,
   "POST /requisitions": roles.PROCUREMENT,
   "POST /requisitions/:id/submit": roles.PROCUREMENT,
   "POST /requisitions/:id/approve": roles.PROCUREMENT,

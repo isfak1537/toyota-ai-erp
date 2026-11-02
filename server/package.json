@@ -5,13 +5,14 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "test": "jest --runInBand",
+    "test": "jest --runInBand --selectProjects unit integration",
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration --runInBand",
     "seed:synthetic": "node prisma/seed/generate.js",
     "reconcile": "node scripts/reconcile.js",
     "seed:users": "node scripts/seed-users.js",
-    "seed:export-fixtures": "node scripts/export-fixtures.js"
+    "seed:export-fixtures": "node scripts/export-fixtures.js",
+    "test:live": "jest --selectProjects live"
   },
   "jest": {
     "projects": [
@@ -33,6 +34,14 @@
           "<rootDir>/tests/setup/env.js"
         ],
         "testTimeout": 30000
+      },
+      {
+        "displayName": "live",
+        "testEnvironment": "node",
+        "testMatch": [
+          "<rootDir>/tests/live/**/*.test.js"
+        ],
+        "testTimeout": 60000
       }
     ]
   },

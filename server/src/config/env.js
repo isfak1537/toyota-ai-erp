@@ -51,6 +51,29 @@ const env = {
     return Number.isInteger(days) && days >= 0 ? days : 7;
   },
 
+  // LLM (AI-009, AI-012). Empty LLM_PROVIDER switches the LLM off; every feature then works without it.
+  get llm() {
+    const number = (name, fallback) => {
+      const value = Number(process.env[name]);
+
+      return Number.isFinite(value) && value > 0 ? value : fallback;
+    };
+
+    return {
+      provider: (process.env.LLM_PROVIDER || "").trim().toLowerCase(),
+      model: (process.env.LLM_MODEL || "").trim(),
+      fallbackProvider: (process.env.LLM_FALLBACK_PROVIDER || "").trim().toLowerCase(),
+      fallbackModel: (process.env.LLM_FALLBACK_MODEL || "").trim(),
+      groqApiKey: process.env.GROQ_API_KEY || "",
+      geminiApiKey: process.env.GEMINI_API_KEY || "",
+      ollamaBaseUrl: (process.env.OLLAMA_BASE_URL || "http://localhost:11434").replace(/\/+$/, ""),
+      timeoutMs: number("LLM_TIMEOUT_MS", 15000),
+      // below the Groq free tier on purpose (NFR-015)
+      ratePerMinute: number("LLM_RATE_PER_MINUTE", 20),
+      ratePerDay: number("LLM_RATE_PER_DAY", 800),
+    };
+  },
+
   get jwtExpiresIn() {
     return process.env.JWT_EXPIRES_IN || "8h";
   },

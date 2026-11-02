@@ -1,7 +1,10 @@
+const prisma = require("../config/prisma");
 const replenishment = require("../modules/ai/replenishment.service");
 const suggestions = require("../modules/ai/suggestion.service");
 const anomalies = require("../modules/ai/anomaly.service");
 const models = require("../modules/ai/models.service");
+const explain = require("../modules/ai/llm/explain");
+const { NotFoundError } = require("../errors/app-error");
 const { parseId } = require("../utils/ids");
 const { parsePagination, toPagination } = require("../utils/pagination");
 const { ValidationError } = require("../errors/app-error");
@@ -105,7 +108,38 @@ const productForecast = async (req, res) => {
   res.json({ success: true, data });
 };
 
+const sendExplanation = (res, result) => {
+  if (result === null) {
+    // not found is handled by the caller; here the LLM simply did not answer
+    return res.json({ success: true, message: "Explanation unavailable", data: { explanation: null, explanationSource: null } });
+  }
+
+  return res.json({ success: true, message: result.cached ? "Explanation (cached)" : "Explanation generated", data: result });
+};
+
+const explainSuggestion = async (req, res) => {
+  const id = parseId(req.params.id, "Invalid suggestion ID");
+
+  if (!(await prisma.aiSuggestion.findUnique({ where: { id }, select: { id: true } }))) {
+    throw new NotFoundError("AI suggestion not found");
+  }
+
+  sendExplanation(res, await explain.explainSuggestion(id, req.user.id));
+};
+
+const explainAnomaly = async (req, res) => {
+  const id = parseId(req.params.id, "Invalid anomaly ID");
+
+  if (!(await prisma.anomalyFlag.findUnique({ where: { id }, select: { id: true } }))) {
+    throw new NotFoundError("Anomaly flag not found");
+  }
+
+  sendExplanation(res, await explain.explainAnomaly(id, req.user.id));
+};
+
 module.exports = {
+  explainSuggestion,
+  explainAnomaly,
   listModels,
   retrainModels,
   productForecast,

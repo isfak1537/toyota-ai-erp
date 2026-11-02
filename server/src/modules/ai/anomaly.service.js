@@ -2,6 +2,9 @@ const prisma = require("../../config/prisma");
 const { getAiClient } = require("./ai.client");
 const { NotFoundError } = require("../../errors/app-error");
 const { writeAudit } = require("../../services/audit.service");
+const { explainMany, explainAnomaly } = require("./llm/explain");
+
+const EXPLAIN_PER_SYNC = 20; // the rest are explained on demand; keeps within the LLM quota
 
 const SYNC_LOCK_KEY = 7341002;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -51,18 +54,20 @@ const syncAnomalies = async ({ from, to, transactionIds, queueSize, queuePeriod 
     (await prisma.inventoryTransaction.findMany({ where: { id: { in: ids } }, select: { id: true } })).map((row) => row.id)
   );
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SYNC_LOCK_KEY}::int)`; // released at commit
 
-    const existing = new Set(
-      (await tx.anomalyFlag.findMany({ where: { inventoryTransactionId: { in: ids } }, select: { inventoryTransactionId: true } })).map(
-        (row) => row.inventoryTransactionId
+    const existingFlags = new Map(
+      (await tx.anomalyFlag.findMany({ where: { inventoryTransactionId: { in: ids } }, select: { inventoryTransactionId: true, source: true, ruleCodes: true, explanation: true } })).map(
+        (row) => [row.inventoryTransactionId, row]
       )
     );
+    const existing = new Set(existingFlags.keys());
 
     let created = 0;
     let updated = 0;
     let ignored = 0;
+    const toExplain = [];
 
     for (const flag of response.flags) {
       if (!known.has(flag.inventoryTransactionId)) {
@@ -81,11 +86,17 @@ const syncAnomalies = async ({ from, to, transactionIds, queueSize, queuePeriod 
         modelVersion: response.modelVersion,
       };
 
+      const before = existingFlags.get(flag.inventoryTransactionId);
+      // an explanation describes what flagged the row; if that changed, it is stale and is regenerated
+      const detectorsChanged = before && (before.source !== data.source || before.ruleCodes.join() !== data.ruleCodes.join());
+
       await tx.anomalyFlag.upsert({
         where: { inventoryTransactionId: flag.inventoryTransactionId },
         create: { inventoryTransactionId: flag.inventoryTransactionId, ...data },
-        update: data, // status, reviewer and note are deliberately not part of an update
+        update: { ...data, ...(detectorsChanged && { explanation: null, explanationSource: null }) }, // status, reviewer and note are never part of an update
       });
+
+      if (!before || detectorsChanged || !before.explanation) toExplain.push({ key: flag.inventoryTransactionId, score: flag.score });
 
       if (existing.has(flag.inventoryTransactionId)) updated += 1;
       else created += 1;
@@ -103,8 +114,15 @@ const syncAnomalies = async ({ from, to, transactionIds, queueSize, queuePeriod 
 
     await writeAudit(tx, { eventType: "ANOMALY_SYNC", actorUserId: actor?.id ?? null, payload: summary });
 
-    return summary;
+    return { summary, toExplain };
   });
+
+  // AI-009: explain the highest-scoring new or changed flags, best effort, outside the transaction
+  const wanted = result.toExplain.sort((a, b) => b.score - a.score).slice(0, EXPLAIN_PER_SYNC).map((x) => x.key);
+  const flagIds = (await prisma.anomalyFlag.findMany({ where: { inventoryTransactionId: { in: wanted } }, select: { id: true } })).map((row) => row.id);
+  const explained = await explainMany(flagIds, (id) => explainAnomaly(id, actor?.id ?? null));
+
+  return { ...result.summary, explained };
 };
 
 const listAnomalies = async ({ status, kind, skip, take }) => {

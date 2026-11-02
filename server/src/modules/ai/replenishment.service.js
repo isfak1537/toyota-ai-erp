@@ -5,6 +5,7 @@ const prisma = require("../../config/prisma");
 const { getAiClient } = require("./ai.client");
 const { computeReplenishment, selectSupplier, onOrderFor } = require("./replenishment");
 const { writeAudit } = require("../../services/audit.service");
+const { explainMany, explainSuggestion } = require("./llm/explain");
 
 const FORECAST_BATCH = 500; // the AI service accepts at most 500 series per request
 const FORECAST_HORIZON = 30; // days asked for; the first (lead time + review) days are averaged
@@ -260,14 +261,20 @@ const runReplenishment = async (actor) => {
     return { rows, expired: expired.count };
   });
 
+  // AI-009: explanations are best effort and outside the transaction; a failure leaves explanation null
+  const explained = await explainMany(created.rows.map((row) => row.id), (id) => explainSuggestion(id, actor?.id ?? null));
+  const suggestions = explained > 0
+    ? await prisma.aiSuggestion.findMany({ where: { runId }, include: suggestionInclude, orderBy: { id: "asc" } })
+    : created.rows;
+
   return {
     runId,
     modelVersion,
     asOf,
     params: { z, reviewDays },
-    counts: { ...counts, expiredPending: created.expired },
+    counts: { ...counts, expiredPending: created.expired, explained },
     skipped,
-    suggestions: created.rows,
+    suggestions,
   };
 };
 
