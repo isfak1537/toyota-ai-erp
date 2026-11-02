@@ -102,7 +102,9 @@ depends on available hours.
   90-day history, receipts, injected anomalies (labels saved to a JSON
   file).
 
-- scripts/reconcile.js verifies inventory balances against ledger.
+- scripts/reconcile.js verifies inventory balances against ledger
+  (implemented as server/scripts/reconcile.js, `npm run reconcile`; the
+  generator is `npm run seed:synthetic`, dry run by default).
 
 ## P2 — Forecasting
 
@@ -144,6 +146,8 @@ depends on available hours.
   chart library for forecasts.
 
 - Pages per SRS section 6; loading/empty/error states.
+
+- Footer or about page labels the demo data as synthetic (SEED-008).
 
 ## P7 — Release
 
