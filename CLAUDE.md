@@ -21,6 +21,8 @@ server/        Node.js + Express 5 (CommonJS) + Prisma 7 + PostgreSQL
     validators/   Zod schemas
     middlewares/  validate, error
     modules/ai/   (new) replenishment, suggestions, llm.provider, ai.client
+  prisma/seed/  synthetic data generator (deterministic), writer, CLI, anomaly-labels.json
+  scripts/      reconcile.js
 ai-service/    (new, P2) Python FastAPI: forecasting + anomaly models
 docs/          PRD, SRS, Build Plan (Markdown)
 ```
@@ -37,7 +39,11 @@ npm run test:integration         # runs migrate deploy on the test DB, truncates
 npm exec prisma -- validate
 npm exec prisma -- migrate dev --name <name>   # only after showing me the schema diff
 npm exec prisma -- generate
-npm run db:seed
+npm run seed:synthetic           # synthetic demo data: DRY RUN by default
+                                 #   -- --apply writes (refuses if seed rows exist), -- --apply --replace
+                                 #   deletes exactly the SYN- rows first; --seed N, --end-date D
+npm run reconcile                # inventory = last ledger balance + chain/document checks
+                                 #   -- --scope seed|all, --strict
 
 # client
 cd client && npm install && npm run dev   # port 5173
@@ -97,22 +103,31 @@ Keep `npm test` passing.
 
 ## Current status
 
-- P0 gate review complete on branch `phase-0-fixes`. Done: repo hygiene, D-05 (typed errors,
-  central error middleware, app/index split), test database harness (1.3), D-02 (atomic stock
-  changes for receive, issue, adjust, reserve, release and transfer, with concurrency tests and
-  CHECK constraints, applied to the dev DB), D-03 (goods receipt in one locked transaction), D-06
-  (Decimal procurement money), D-07 (Zod writes and pagination) for the inventory, stock-transfer
-  and procurement modules, atomic status transitions, guarded inventory delete, strict ids, and a
-  cumulative requisition-to-PO quantity cap.
-- Next: P1 (synthetic seed and reconcile check). Update this section when a phase gate passes.
+- P0 is merged and tagged `m1-stable-core` (typed errors, atomic stock changes, locked goods
+  receipt, Decimal money, Zod writes and pagination, cumulative PO cap, test database harness).
+- P1 (synthetic data) is built on branch `phase-1-seed` and waits for the owner's confirmation:
+  deterministic generator (`prisma/seed/`), `npm run seed:synthetic`, `npm run reconcile`,
+  committed `anomaly-labels.json`. The old `prisma/seed.js` / `db:seed` is retired.
+- Next: P2 (Python AI service: forecasting). Update this section when a phase gate passes.
 
 ### Pending verification
 
 - None.
 
-### Known gaps (not blocking the P0 gate)
+### Known gaps (not blocking)
 
 - No authentication or authorization yet: every endpoint is public until P4.
+- The ledger cannot reconcile reserved quantity: RESERVATION/RELEASE rows carry quantity 0 and
+  the amount only appears in the free-text reason. Add a `reservedDelta`/`reservedAfter` column in
+  P4, then extend `scripts/reconcile.js` to check it.
+- The seed bulk-inserts back-dated stock history directly, bypassing the inventory service (the
+  service cannot back-date). It is the one documented exception to "stock changes only through the
+  service"; the CHECK constraints and `npm run reconcile` verify the result.
+- SEED-008: label the demo data as synthetic in the UI footer or about page (P6 checklist; the
+  data itself is marked by the company name "Toyota AI ERP (Synthetic Demo)" and SYN- prefixes).
+- Anomaly time convention: events are stored in UTC, business hours are 08:00-17:00 Asia/Dhaka
+  (02:00-11:00 UTC), weekend Fri/Sat. The daily series (AI-001) and the anomaly model (P3) must
+  use the same convention.
 - The other modules (product, category, company, factory, warehouse, supplier, supplier-product,
   customer, sales-order) still use the legacy error bridge or their own try/catch; migrate them
   to `AppError` and Zod when they are next touched. Product lists use `limit`, the new lists use
