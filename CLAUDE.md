@@ -42,7 +42,10 @@ npm exec prisma -- generate
 npm run seed:synthetic           # synthetic demo data: DRY RUN by default
                                  #   -- --apply writes (refuses if seed rows exist), -- --apply --replace
                                  #   deletes exactly the SYN- rows first; --seed N, --end-date D
-npm run reconcile                # inventory = last ledger balance + chain/document checks
+npm run seed:users               # 4 demo users; passwords from DEMO_*_PASSWORD env (>= 12 chars), never printed
+                                 #   -- --reset-passwords overwrites existing users' passwords
+npm run test:live                # optional: real Groq calls, only if GROQ_API_KEY is set (not part of npm test)
+npm run reconcile                # inventory = last ledger balance + chain/document checks + reserved = reservedAfter
                                  #   -- --scope seed|all, --strict
 
 # client
@@ -115,7 +118,14 @@ Keep `npm test` passing.
   residuals); rules R1-R5 + an Isolation Forest risk score with a weekly review queue (top 10 per local week, top contributing features), evaluated against `anomaly-labels.json`; model registry
   with deterministic versions; notebooks and `ai-service/REPORT.md`. The ERP API does not call it yet (P4).
 - P2 + P3 passed their gate and are merged and tagged `m3-ai-models` (live end-to-end run through the read-only role: green).
-- Next: P4 (ERP AI module: replenishment, suggestions, approval, minimal auth). Update this section when a phase gate passes.
+- P4 + P5 (ERP AI module, auth, LLM layer) are built on branch `phase-4-ai-erp` and wait for the owner's confirmation:
+  JWT login with 4 roles and `requireRole` on every route (matrix in SRS 9), actors recorded on stock and approval actions,
+  `destinationWarehouseId` on requisition/PO headers, `reservedAfter` on the ledger (reconcile checks it), `ai.client`
+  (shared secret, timeouts, 503 when the AI service is down), replenishment (AI-004..006), atomic and idempotent approve
+  (AI-007, parallel double-approve test), anomaly flags with separate rule-hit and review-queue lists, model runs and retrain,
+  LLM explanations (Groq primary, Gemini fallback, Ollama local; cached; `null` on any failure; 20/min and 800/day caps),
+  and a read-only assistant (fixed tool registry, tests prove no write tool).
+- Next: P6 (React UI). Update this section when a phase gate passes.
 
 ### Pending verification
 
@@ -123,15 +133,20 @@ Keep `npm test` passing.
 
 ### P6 checklist (UI)
 
+- Login page and role-based navigation (UI-001); hide actions the role cannot do, the API enforces them anyway (403).
+- Show each AI output with its inputs, model version and whether the explanation came from an LLM (NFR-013); "explanation unavailable" when null.
+- Suggestions page: approve/reject with the 200 `idempotent: true` repeat handled; goods receipt form: warehouse defaults to the PO's destination.
 - Anomalies page: show rule flags and the model review queue in **separate tabs** ("Confirmed rule hits" vs "Weekly review queue"), never as one list.
 - SEED-008: label the demo data as synthetic (footer or about page).
 
 ### Known gaps (not blocking)
 
-- No authentication or authorization yet: every endpoint is public until P4.
-- The ledger cannot reconcile reserved quantity: RESERVATION/RELEASE rows carry quantity 0 and
-  the amount only appears in the free-text reason. Add a `reservedDelta`/`reservedAfter` column in
-  P4, then extend `scripts/reconcile.js` to check it.
+- Auth is minimal (P4): JWT in the Authorization header, no refresh tokens, no logout endpoint (the client discards the token), no password change or user management API (users come from `npm run seed:users`), login attempts limited in memory per process.
+- Ledger rows written before P4 have `reservedAfter` NULL; reconcile only warns about those series. Re-run
+  `npm run seed:synthetic -- --apply --replace` to refill the synthetic data with it.
+- `routes/category.routes.js` exists but is not mounted in `app.js` (categories have no API); mount it behind the master-data role if the UI needs it.
+- LLM daily cap counts audit rows (shared across instances); the per-minute window is per process.
+- One unexplained flaky run of the Node suite (5 failures in two suites, passed on the next 5 runs) was seen once in this phase and once earlier; not reproduced.
 - The seed bulk-inserts back-dated stock history directly, bypassing the inventory service (the
   service cannot back-date). It is the one documented exception to "stock changes only through the
   service"; the CHECK constraints and `npm run reconcile` verify the result.

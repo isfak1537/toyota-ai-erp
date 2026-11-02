@@ -271,6 +271,16 @@ SalesOrder(+Item). The Prisma schema remains the source of truth.
 | AiAuditLog       | id, eventType, actorUserId (nullable), payload (JSON), createdAt                                                                                                                                                             | Suggestion runs, LLM calls, decisions                                           |
 | (changes)        | InventoryTransaction.createdById, PurchaseRequisition.approvedById, AI source reference on requisition                                                                                                                       | Actor attribution                                                               |
 
+**As built in P4 (3 Nov 2026).** Additions beyond the table above:
+
+- `PurchaseRequisition.destinationWarehouseId` and `PurchaseOrder.destinationWarehouseId` (nullable, on the header). A purchase order inherits the destination of its requisition; naming a different one is a 400. A goods receipt defaults to the order's destination; receiving elsewhere is a 400 unless `allowDifferentWarehouse` is set by an ADMIN or WAREHOUSE_MANAGER, and is then written to the audit log (`GOODS_RECEIPT_WAREHOUSE_OVERRIDE`).
+- `InventoryTransaction.reservedAfter` (reserved quantity after the movement, like `balanceAfter`; NULL on rows older than P4). `npm run reconcile` checks that the newest non-null value equals `Inventory.reservedQuantity`.
+- `createdById` also on `GoodsReceipt` and `PurchaseRequisition`, `approvedById` also on `PurchaseOrder`, `sourceType`/`sourceId` on `PurchaseRequisition` (`AI_SUGGESTION` and the suggestion id).
+- `AiSuggestion` also stores `zValue`, `reviewDays`, `minimumOrderQty`, `onOrderMethod` (`DESTINATION`, `DEMAND_SHARE`, `DESTINATION+DEMAND_SHARE` or `NONE`), `forecastModel`, `runId`, `rejectReason`, `explanationSource` and an `inputs` JSON with every calculation input, including the unrounded onOrder. `onOrder` is open purchase-order quantity addressed to the warehouse plus a demand-share portion of orders without a destination, **floored** so the system never assumes more stock is coming than is certain.
+- `AnomalyFlag.source` is `MODEL`, `RULE` or `BOTH`, with `ruleCodes`, `queueRank`, `period`, `topFeatures` and the explanation. Rule hits (`ruleCodes` not empty) and the weekly review queue (`queueRank` not null) are separate lists.
+- Replenishment defaults (decided 2 Nov 2026): z = 1.65 and a 7-day review period (`REPLEN_Z`, `REPLEN_REVIEW_DAYS`), stored with every suggestion.
+- `AiAuditLog.eventType` values in use: `REPLENISHMENT_RUN`, `SUGGESTION_APPROVED`, `SUGGESTION_REJECTED`, `ANOMALY_SYNC`, `ANOMALY_REVIEWED`, `MODEL_RETRAIN`, `LLM_CALL`, `LLM_SKIPPED`, `ASSISTANT_QUESTION`, `GOODS_RECEIPT_WAREHOUSE_OVERRIDE`.
+
 # 9. API and External Interface Requirements
 
 - Business APIs versioned under /api/v1 with a consistent response
@@ -300,7 +310,14 @@ SalesOrder(+Item). The Prisma schema remains the source of truth.
 | POST /api/v1/ai/ask                                                     | AI assistant question                          | All                        |
 | GET /api/v1/ai/models                                                   | Model runs and metrics                         | All                        |
 | POST /api/v1/ai/models/retrain                                          | Retrain models                                 | ADMIN                      |
+| POST /api/v1/ai/suggestions/:id/explain                                 | Generate the LLM explanation if missing        | PROCUREMENT_OFFICER, ADMIN |
+| POST /api/v1/ai/anomalies/sync                                          | Score a window, store/refresh anomaly flags    | WAREHOUSE_MANAGER, ADMIN   |
+| GET /api/v1/ai/anomalies?status=&kind=rule\|queue                       | Rule hits or weekly review queue               | All                        |
+| POST /api/v1/ai/anomalies/:id/explain                                   | Generate the LLM explanation if missing        | WAREHOUSE_MANAGER, ADMIN   |
+| GET /api/v1/auth/me                                                     | The logged-in user                             | All                        |
 | Python: GET /health, POST /forecast, POST /anomalies/score, POST /train | Internal AI service API (shared secret header) | ERP API only               |
+
+**Role matrix as built (P4; proposal for the open item in section 15).** Every `/api/v1` route except `POST /auth/login` needs a valid token (401). Reads are open to every role. Writes: master data (company, factory, warehouse, product, customer, sales order) ADMIN; stock operations and transfers ADMIN, WAREHOUSE_MANAGER; suppliers, supplier products, requisitions, purchase orders, invoices, replenishment runs and suggestion decisions ADMIN, PROCUREMENT_OFFICER; goods receipts ADMIN, WAREHOUSE_MANAGER, PROCUREMENT_OFFICER; anomaly sync and review ADMIN, WAREHOUSE_MANAGER; retraining ADMIN; the assistant (`POST /ai/ask`, read-only tools) every role. Insufficient role is 403. The AI service being down or the LLM failing gives 503 on AI routes only (`explanation: null`, `answer: null`); ERP routes are unaffected (NFR-014).
 
 # 10. Non-Functional Requirements
 
