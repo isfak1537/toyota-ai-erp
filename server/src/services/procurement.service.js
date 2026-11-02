@@ -2,6 +2,12 @@ const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const inventoryService = require("./inventory.service");
 const {
+  calculateTotals,
+  invoiceStatusFor,
+  lineTotalOf,
+  toMoney,
+} = require("../utils/money");
+const {
   ConflictError,
   NotFoundError,
   ValidationError,
@@ -31,16 +37,6 @@ const toPositiveInteger = (value, fieldName) => {
   return number;
 };
 
-const toMoney = (value, fieldName = "amount") => {
-  const number = Number(value);
-
-  if (!Number.isFinite(number) || number < 0) {
-    throw new ValidationError(`${fieldName} must be a valid non-negative number`);
-  }
-
-  return Number(number.toFixed(2));
-};
-
 const toDateOrNull = (value, fieldName) => {
   if (value === undefined || value === null || value === "") {
     return null;
@@ -53,21 +49,6 @@ const toDateOrNull = (value, fieldName) => {
   }
 
   return date;
-};
-
-const calculateTotals = (items, taxAmount = 0) => {
-  const subtotal = items.reduce(
-    (sum, item) => sum + Number(item.lineTotal),
-    0
-  );
-
-  const tax = toMoney(taxAmount, "taxAmount");
-
-  return {
-    subtotal: Number(subtotal.toFixed(2)),
-    taxAmount: tax,
-    totalAmount: Number((subtotal + tax).toFixed(2)),
-  };
 };
 
 const createRequisition = async (data) => {
@@ -393,9 +374,7 @@ const createPurchaseOrder = async (data) => {
       }
     }
 
-    const lineTotal = Number(
-      (quantity * unitPrice).toFixed(2)
-    );
+    const lineTotal = lineTotalOf(quantity, unitPrice);
 
     purchaseOrderItems.push({
       productId,
@@ -892,9 +871,7 @@ const createPurchaseInvoice = async (data) => {
       }
     }
 
-    const lineTotal = Number(
-      (quantity * unitPrice).toFixed(2)
-    );
+    const lineTotal = lineTotalOf(quantity, unitPrice);
 
     invoiceItems.push({
       productId,
@@ -914,24 +891,16 @@ const createPurchaseInvoice = async (data) => {
     "paidAmount"
   );
 
-  if (parsedPaidAmount > totals.totalAmount) {
+  if (parsedPaidAmount.greaterThan(totals.totalAmount)) {
     throw new ValidationError(
       "paidAmount cannot exceed invoice totalAmount"
     );
   }
 
-  let status = "UNPAID";
-
-  if (
-    parsedPaidAmount > 0 &&
-    parsedPaidAmount < totals.totalAmount
-  ) {
-    status = "PARTIALLY_PAID";
-  }
-
-  if (parsedPaidAmount === totals.totalAmount) {
-    status = "PAID";
-  }
+  const status = invoiceStatusFor(
+    parsedPaidAmount,
+    totals.totalAmount
+  );
 
   const parsedDueDate = toDateOrNull(
     dueDate,
