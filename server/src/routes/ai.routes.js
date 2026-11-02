@@ -4,7 +4,7 @@ const controller = require("../controllers/ai.controller");
 const validate = require("../middlewares/validate.middleware");
 const { requireRole } = require("../middlewares/auth.middleware");
 const roles = require("../middlewares/roles");
-const { runReplenishmentSchema, approveSuggestionSchema, rejectSuggestionSchema, syncAnomaliesSchema, reviewAnomalySchema } = require("../validators/ai.validator");
+const { runReplenishmentSchema, approveSuggestionSchema, rejectSuggestionSchema, syncAnomaliesSchema, reviewAnomalySchema, retrainSchema } = require("../validators/ai.validator");
 
 const router = express.Router();
 
@@ -17,5 +17,9 @@ router.post("/suggestions/:id/reject", requireRole(...roles.PROCUREMENT), valida
 router.post("/anomalies/sync", requireRole(...roles.ANOMALY_REVIEW), validate(syncAnomaliesSchema), controller.syncAnomalies);
 router.get("/anomalies", controller.listAnomalies);
 router.post("/anomalies/:id/review", requireRole(...roles.ANOMALY_REVIEW), validate(reviewAnomalySchema), controller.reviewAnomaly);
+
+router.get("/forecast/:productId", controller.productForecast);
+router.get("/models", controller.listModels);
+router.post("/models/retrain", requireRole(...roles.ADMIN_ONLY), validate(retrainSchema), controller.retrainModels);
 
 module.exports = router;

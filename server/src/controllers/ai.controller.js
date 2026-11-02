@@ -1,11 +1,12 @@
 const replenishment = require("../modules/ai/replenishment.service");
 const suggestions = require("../modules/ai/suggestion.service");
 const anomalies = require("../modules/ai/anomaly.service");
+const models = require("../modules/ai/models.service");
 const { parseId } = require("../utils/ids");
 const { parsePagination, toPagination } = require("../utils/pagination");
 const { ValidationError } = require("../errors/app-error");
 const { fieldDetails } = require("../utils/zod-details");
-const { listSuggestionsQuery, listAnomaliesQuery } = require("../validators/ai.validator");
+const { listSuggestionsQuery, listAnomaliesQuery, listModelsQuery, forecastQuery } = require("../validators/ai.validator");
 
 const parseQuery = (schema, query) => {
   const result = schema.safeParse(query);
@@ -79,7 +80,35 @@ const reviewAnomaly = async (req, res) => {
   res.json({ success: true, message: data.idempotent ? "Anomaly was already reviewed" : "Anomaly reviewed", data });
 };
 
+const listModels = async (req, res) => {
+  const filters = parseQuery(listModelsQuery, req.query);
+  const pagination = parsePagination(req.query);
+  const { items, total } = await models.listModelRuns({ ...filters, skip: pagination.skip, take: pagination.take });
+
+  res.json({ success: true, data: items, pagination: toPagination(pagination, total) });
+};
+
+const retrainModels = async (req, res) => {
+  const data = await models.retrain(req.body, req.user);
+
+  res.status(201).json({ success: true, message: `Trained ${data.length} model(s)`, data });
+};
+
+const productForecast = async (req, res) => {
+  const query = parseQuery(forecastQuery, req.query);
+  const data = await models.productForecast({
+    productId: parseId(req.params.productId, "Invalid product ID"),
+    warehouseId: query.warehouseId,
+    horizonDays: query.horizonDays,
+  });
+
+  res.json({ success: true, data });
+};
+
 module.exports = {
+  listModels,
+  retrainModels,
+  productForecast,
   runReplenishment,
   listSuggestions,
   approveSuggestion,

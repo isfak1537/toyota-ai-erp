@@ -53,7 +53,24 @@ const listAnomaliesQuery = z.object({
   kind: z.enum(["rule", "queue"]).optional(),
 });
 
+const retrainSchema = z.strictObject({
+  models: z.array(z.enum(["forecast", "anomaly"])).min(1).max(2).optional(),
+  asOf: z.iso.date({ error: "asOf must be a date such as 2026-11-01" }).optional(),
+});
+
+const listModelsQuery = z.object({
+  modelType: z.enum(["FORECAST", "ANOMALY"]).optional(),
+});
+
+const forecastQuery = z.object({
+  warehouseId: z.coerce.number().int().positive().optional(),
+  horizonDays: z.coerce.number().int().min(1).max(30).optional().default(30),
+});
+
 module.exports = {
+  retrainSchema,
+  listModelsQuery,
+  forecastQuery,
   syncAnomaliesSchema,
   reviewAnomalySchema,
   listAnomaliesQuery, runReplenishmentSchema, approveSuggestionSchema, rejectSuggestionSchema, listSuggestionsQuery };
