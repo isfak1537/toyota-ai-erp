@@ -290,44 +290,27 @@ const adjustStock = async ({
   return prisma.$transaction(async (tx) => {
     await validateProductAndWarehouse(tx, productId, warehouseId);
 
-    const inventory = await tx.inventory.findUnique({
-      where: {
-        productId_warehouseId: {
-          productId,
-          warehouseId,
-        },
-      },
+    const updated = await inventoryRepository.applyDelta(tx, {
+      productId,
+      warehouseId,
+      quantityDelta: quantity,
     });
 
-    if (!inventory) {
-      throw new NotFoundError("Inventory record not found");
+    if (!updated) {
+      await failStockChange(tx, productId, warehouseId, (current) => {
+        if (current.quantity + quantity < 0) {
+          return new ConflictError("Adjustment would result in negative stock");
+        }
+
+        return new ConflictError(
+          `Adjustment would make stock lower than reserved quantity (${current.reservedQuantity})`
+        );
+      });
     }
 
-    const newQuantity = inventory.quantity + quantity;
-
-    if (newQuantity < 0) {
-      throw new ConflictError("Adjustment would result in negative stock");
-    }
-
-    if (newQuantity < inventory.reservedQuantity) {
-      throw new ConflictError(
-        `Adjustment would make stock lower than reserved quantity (${inventory.reservedQuantity})`
-      );
-    }
-
-    const updatedInventory = await tx.inventory.update({
-      where: { id: inventory.id },
-      data: {
-        quantity: newQuantity,
-      },
-      include: {
-        product: true,
-        warehouse: {
-          include: {
-            factory: true,
-          },
-        },
-      },
+    const inventory = await tx.inventory.findUnique({
+      where: { id: updated.id },
+      include: inventoryInclude,
     });
 
     const transaction = await tx.inventoryTransaction.create({
@@ -336,7 +319,7 @@ const adjustStock = async ({
         warehouseId,
         type: "ADJUSTMENT",
         quantity,
-        balanceAfter: newQuantity,
+        balanceAfter: updated.quantity,
         referenceType: referenceType || "MANUAL_ADJUSTMENT",
         referenceId: referenceId || null,
         reason: reason || null,
@@ -344,12 +327,11 @@ const adjustStock = async ({
     });
 
     return {
-      inventory: updatedInventory,
+      inventory,
       transaction,
     };
   });
 };
-
 
 const reserveStock = async ({
   productId,
