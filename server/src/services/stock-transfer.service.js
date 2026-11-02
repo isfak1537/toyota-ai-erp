@@ -156,6 +156,8 @@ const completeTransfer = async ({
         quantity,
         sourceBalanceAfter: source.quantity,
         destinationBalanceAfter: destination.quantity,
+        sourceReservedAfter: source.reservedQuantity,
+        destinationReservedAfter: destination.reservedQuantity,
       });
     }
 
@@ -194,6 +196,7 @@ const completeTransfer = async ({
             type: "TRANSFER_OUT",
             quantity: -item.quantity,
             balanceAfter: item.sourceBalanceAfter,
+            reservedAfter: item.sourceReservedAfter,
             referenceType: "STOCK_TRANSFER",
             referenceId: transfer.id,
             reason: `Transfer ${transfer.transferNumber}`,
@@ -205,6 +208,7 @@ const completeTransfer = async ({
             type: "TRANSFER_IN",
             quantity: item.quantity,
             balanceAfter: item.destinationBalanceAfter,
+            reservedAfter: item.destinationReservedAfter,
             referenceType: "STOCK_TRANSFER",
             referenceId: transfer.id,
             reason: `Transfer ${transfer.transferNumber}`,

@@ -313,6 +313,7 @@ const writeDataset = async (prisma, dataset) => {
             type: row.type,
             quantity: row.quantity,
             balanceAfter: row.balanceAfter,
+            reservedAfter: row.reservedAfter,
             referenceType: row.referenceType,
             referenceId: referenceId(row.reference),
             reason: row.reason,

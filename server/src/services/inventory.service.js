@@ -228,6 +228,7 @@ const receiveStock = async ({
     const transaction = await tx.inventoryTransaction.create({
       data: {
         createdById: actorId ?? null,
+        reservedAfter: updated.reservedQuantity,
         productId,
         warehouseId,
         type: "RECEIPT",
@@ -263,6 +264,7 @@ const receiveIntoWarehouseInTx = async (
   const transaction = await tx.inventoryTransaction.create({
     data: {
       createdById: actorId ?? null,
+      reservedAfter: updated.reservedQuantity,
       productId,
       warehouseId,
       type: "RECEIPT",
@@ -317,6 +319,7 @@ const issueStock = async ({
     const transaction = await tx.inventoryTransaction.create({
       data: {
         createdById: actorId ?? null,
+        reservedAfter: updated.reservedQuantity,
         productId,
         warehouseId,
         type: "ISSUE",
@@ -377,6 +380,7 @@ const adjustStock = async ({
     const transaction = await tx.inventoryTransaction.create({
       data: {
         createdById: actorId ?? null,
+        reservedAfter: updated.reservedQuantity,
         productId,
         warehouseId,
         type: "ADJUSTMENT",
@@ -435,6 +439,7 @@ const reserveStock = async ({
     const transaction = await tx.inventoryTransaction.create({
       data: {
         createdById: actorId ?? null,
+        reservedAfter: updated.reservedQuantity,
         productId,
         warehouseId,
         type: "RESERVATION",
@@ -494,6 +499,7 @@ const releaseStock = async ({
     const transaction = await tx.inventoryTransaction.create({
       data: {
         createdById: actorId ?? null,
+        reservedAfter: updated.reservedQuantity,
         productId,
         warehouseId,
         type: "RELEASE",
