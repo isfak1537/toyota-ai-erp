@@ -262,7 +262,7 @@ const runReplenishment = async (actor) => {
   });
 
   // AI-009: explanations are best effort and outside the transaction; a failure leaves explanation null
-  const explained = await explainMany(created.rows.map((row) => row.id), (id) => explainSuggestion(id, actor?.id ?? null));
+  const explained = await explainMany(created.rows.map((row) => row.id), (id) => explainSuggestion(id, actor?.id ?? null, { background: true }));
   const suggestions = explained > 0
     ? await prisma.aiSuggestion.findMany({ where: { runId }, include: suggestionInclude, orderBy: { id: "asc" } })
     : created.rows;

@@ -193,16 +193,55 @@ describe("anomaly explanations", () => {
     expect(facts.mostUnusualAspects).toEqual([{ aspect: "size as a multiple of the usual", value: 8, typical: 1 }]);
   });
 
-  it("explains at most 20 flags per sync (highest scores first) and leaves the rest for on-demand requests", async () => {
+  it("explains at most 10 flags per sync (highest scores first) and leaves the rest for on-demand requests", async () => {
     const list = await rows(25);
     fakeAi.state.anomalies = { modelVersion: "anomaly-test-0001", scored: 25, flags: list.map((r, i) => flag(r.id, { score: 0.5 + i / 100 })) };
 
     const res = await sync();
 
-    expect(res.body.data.explained).toBe(20);
+    expect(res.body.data.explained).toBe(10);
     const unexplained = await prisma.anomalyFlag.findMany({ where: { explanation: null } });
-    expect(unexplained).toHaveLength(5);
-    expect(Math.max(...unexplained.map((x) => x.score))).toBeLessThan(0.55); // the five lowest scores
+    expect(unexplained).toHaveLength(15);
+    expect(Math.max(...unexplained.map((x) => x.score))).toBeLessThan(0.65); // the fifteen lowest scores
+  });
+
+  it("explanations run one at a time, and a big sync leaves the assistant's half of the per-minute budget untouched", async () => {
+    const { createRateLimiter } = require("../../src/modules/ai/llm/llm.service");
+    const list = await rows(30);
+    fakeAi.state.anomalies = { modelVersion: "anomaly-test-0001", scored: 30, flags: list.map((r, i) => flag(r.id, { score: 0.5 + i / 100 })) };
+
+    let running = 0;
+    let peak = 0;
+    const provider = {
+      name: "fakegroq",
+      model: "fake-model",
+      chat: async () => {
+        running += 1;
+        peak = Math.max(peak, running);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        running -= 1;
+
+        return { content: "An explanation.", toolCalls: [], usage: {} };
+      },
+    };
+    // a small budget so the reserve is what limits the sync: 8 per minute, 4 of them for background work
+    const limiter = createRateLimiter({ perMinute: 8, perDay: 1000, callsToday: async () => 0 });
+    setLlm(createLlmService({ providers: [provider], limiter }));
+
+    const res = await sync();
+
+    expect(peak).toBe(1);
+    expect(res.body.data.explained).toBe(4); // the cap of 10 per sync is above the background share
+    expect(await prisma.aiAuditLog.count({ where: { eventType: "LLM_SKIPPED", payload: { path: ["reason"], equals: "RATE_BACKGROUND_RESERVE" } } })).toBeGreaterThan(0);
+
+    // right after the burst, people (the assistant, on-demand explanations) still get their half: 3 questions + 1 explanation
+    const id = (await prisma.anomalyFlag.findFirst({ where: { explanation: null }, orderBy: { id: "asc" } })).id;
+    for (let i = 0; i < 3; i += 1) {
+      const answer = await api().post("/api/v1/ai/ask").send({ question: "How many flags are open?" });
+
+      expect(answer.body.data.unavailable).toBe(false);
+    }
+    expect((await api().post(`/api/v1/ai/anomalies/${id}/explain`).send({})).body.message).not.toBe("Explanation unavailable");
   });
 
   it("a re-sync keeps the cached explanation unless the detectors changed", async () => {

@@ -47,7 +47,7 @@ const anomalyFacts = (flag) => ({
   mostUnusualAspects: (flag.topFeatures ?? []).map((f) => ({ aspect: f.feature, value: f.value, typical: f.typical })),
 });
 
-const ask = async (kind, facts, actorUserId) => {
+const ask = async (kind, facts, actorUserId, background) => {
   const result = await getLlm().complete(
     {
       messages: [
@@ -57,7 +57,7 @@ const ask = async (kind, facts, actorUserId) => {
       maxTokens: 700,
       temperature: 0.2,
     },
-    { purpose: `explain_${kind}`, actorUserId }
+    { purpose: `explain_${kind}`, actorUserId, background }
   );
 
   return result && result.content ? { text: result.content, source: result.source } : null;
@@ -71,13 +71,13 @@ const suggestionRelations = {
 
 // Generates and stores the explanation of one suggestion unless it has one. Returns the stored
 // explanation or null. The numbers of a suggestion never change, so one explanation per row is the cache.
-const explainSuggestion = async (id, actorUserId = null) => {
+const explainSuggestion = async (id, actorUserId = null, { background = false } = {}) => {
   const suggestion = await prisma.aiSuggestion.findUnique({ where: { id }, include: suggestionRelations });
 
   if (!suggestion) return null;
   if (suggestion.explanation) return { explanation: suggestion.explanation, explanationSource: suggestion.explanationSource, cached: true };
 
-  const made = await ask("suggestion", suggestionFacts(suggestion), actorUserId);
+  const made = await ask("suggestion", suggestionFacts(suggestion), actorUserId, background);
 
   if (!made) return null;
 
@@ -88,7 +88,7 @@ const explainSuggestion = async (id, actorUserId = null) => {
   return { ...stored, cached: false };
 };
 
-const explainAnomaly = async (id, actorUserId = null) => {
+const explainAnomaly = async (id, actorUserId = null, { background = false } = {}) => {
   const flag = await prisma.anomalyFlag.findUnique({
     where: { id },
     include: { transaction: { include: { product: { select: { sku: true, name: true } }, warehouse: { select: { code: true } } } } },
@@ -97,7 +97,7 @@ const explainAnomaly = async (id, actorUserId = null) => {
   if (!flag) return null;
   if (flag.explanation) return { explanation: flag.explanation, explanationSource: flag.explanationSource, cached: true };
 
-  const made = await ask("anomaly flag", anomalyFacts(flag), actorUserId);
+  const made = await ask("anomaly flag", anomalyFacts(flag), actorUserId, background);
 
   if (!made) return null;
 
@@ -107,9 +107,10 @@ const explainAnomaly = async (id, actorUserId = null) => {
   return { ...stored, cached: false };
 };
 
-// Best effort for a batch (a replenishment run, an anomaly sync): a few at a time, stops when the
-// time budget is spent, leaves the rest for on-demand requests. Never throws.
-const explainMany = async (ids, explainOne, { concurrency = 3, budgetMs = 20000, now = Date.now } = {}) => {
+// Best effort for a batch (a replenishment run, an anomaly sync): one at a time, stops when the time
+// budget is spent, leaves the rest for on-demand requests. Never throws. Batches run as background work,
+// which the rate limiter keeps to half of the per-minute budget.
+const explainMany = async (ids, explainOne, { concurrency = 1, budgetMs = 20000, now = Date.now } = {}) => {
   const deadline = now() + budgetMs;
   const queue = [...ids];
   let done = 0;

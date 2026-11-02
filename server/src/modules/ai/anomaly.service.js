@@ -4,7 +4,7 @@ const { NotFoundError } = require("../../errors/app-error");
 const { writeAudit } = require("../../services/audit.service");
 const { explainMany, explainAnomaly } = require("./llm/explain");
 
-const EXPLAIN_PER_SYNC = 20; // the rest are explained on demand; keeps within the LLM quota
+const EXPLAIN_PER_SYNC = 10; // the rest are explained on demand; keeps within the LLM quota and leaves room for people
 
 const SYNC_LOCK_KEY = 7341002;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -120,7 +120,7 @@ const syncAnomalies = async ({ from, to, transactionIds, queueSize, queuePeriod 
   // AI-009: explain the highest-scoring new or changed flags, best effort, outside the transaction
   const wanted = result.toExplain.sort((a, b) => b.score - a.score).slice(0, EXPLAIN_PER_SYNC).map((x) => x.key);
   const flagIds = (await prisma.anomalyFlag.findMany({ where: { inventoryTransactionId: { in: wanted } }, select: { id: true } })).map((row) => row.id);
-  const explained = await explainMany(flagIds, (id) => explainAnomaly(id, actor?.id ?? null));
+  const explained = await explainMany(flagIds, (id) => explainAnomaly(id, actor?.id ?? null, { background: true }));
 
   return { ...result.summary, explained };
 };

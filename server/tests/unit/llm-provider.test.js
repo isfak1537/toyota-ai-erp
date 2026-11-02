@@ -150,6 +150,66 @@ describe("rate limiter", () => {
   });
 });
 
+describe("rate limiter: capacity reserved for people", () => {
+  const limiter = (perMinute = 20) => createRateLimiter({ perMinute, perDay: 1000, now: () => 0, callsToday: async () => 0 });
+  const take = async (l, n, options) => {
+    const out = [];
+
+    for (let i = 0; i < n; i += 1) out.push(await l.tryAcquire(options));
+
+    return out;
+  };
+
+  it("background work may use at most half of the per-minute budget, however much it asks for", async () => {
+    const l = limiter(20);
+    const results = await take(l, 15, { background: true });
+
+    expect(results.filter((r) => r === null)).toHaveLength(10);
+    expect(new Set(results.filter((r) => r !== null))).toEqual(new Set(["RATE_BACKGROUND_RESERVE"]));
+  });
+
+  it("people still get the whole other half after a background burst, and then the full budget is spent", async () => {
+    const l = limiter(20);
+
+    await take(l, 20, { background: true }); // uses 10, refused 10
+    const people = await take(l, 11, { background: false });
+
+    expect(people.filter((r) => r === null)).toHaveLength(10);
+    expect(people[10]).toBe("RATE_PER_MINUTE");
+  });
+
+  it("people are not limited by the reserve: they can use the whole budget when nothing runs in the background", async () => {
+    const l = limiter(20);
+
+    expect((await take(l, 20, {})).every((r) => r === null)).toBe(true);
+    expect(await l.tryAcquire({ background: false })).toBe("RATE_PER_MINUTE");
+  });
+
+  it("background work stops while people have used more than half of the budget (the total still holds)", async () => {
+    const l = limiter(20);
+
+    await take(l, 15, {}); // people use 15
+    const background = await take(l, 7, { background: true });
+
+    expect(background.filter((r) => r === null)).toHaveLength(5); // only 5 slots left in total
+    expect(background[5]).toBe("RATE_PER_MINUTE");
+  });
+
+  it("a tiny budget still lets background work have one call", async () => {
+    expect(await limiter(1).tryAcquire({ background: true })).toBeNull();
+  });
+
+  it("the service tells the limiter whether a call is background work", async () => {
+    const seen = [];
+    const llm = createLlmService({ providers: [{ name: "p", model: "m", chat: async () => ({ content: "x", toolCalls: [], usage: {} }) }], limiter: { tryAcquire: async (options) => { seen.push(options); return null; } }, audit: async () => {} });
+
+    await llm.complete({ messages: [] }, { purpose: "a", background: true });
+    await llm.complete({ messages: [] }, { purpose: "b" });
+
+    expect(seen).toEqual([{ background: true }, { background: false }]);
+  });
+});
+
 describe("llm service", () => {
   const fake = (name, behaviour) => ({ name, model: `${name}-model`, chat: behaviour });
   const open = { tryAcquire: async () => null };

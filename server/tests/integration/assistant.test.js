@@ -66,7 +66,7 @@ describe("the tool registry is read-only", () => {
   it("has exactly the expected read tools and no write-sounding name", () => {
     const names = registry().map((t) => t.name);
 
-    expect(names).toEqual(["get_low_stock", "get_stock", "get_forecast", "list_suggestions", "list_anomalies", "get_models"]);
+    expect(names).toEqual(["get_low_stock", "get_stock", "get_forecast", "get_days_of_cover", "list_suggestions", "list_anomalies", "get_models"]);
     expect(names.every((n) => /^(get|list)_/.test(n))).toBe(true);
     expect(names.join(" ")).not.toMatch(/create|update|delete|remove|approve|reject|reserve|issue|adjust|receive|transfer|retrain|sync|write|save|run_|set_|add_/i);
   });
@@ -111,13 +111,21 @@ describe("the tool registry is read-only", () => {
       },
     });
 
-    const args = { get_low_stock: {}, get_stock: { sku: (await prisma.product.findFirst()).sku }, get_forecast: { sku: (await prisma.product.findFirst()).sku }, list_suggestions: {}, list_anomalies: {}, get_models: {} };
+    const args = { get_low_stock: {}, get_days_of_cover: {}, get_stock: { sku: (await prisma.product.findFirst()).sku }, get_forecast: { sku: (await prisma.product.findFirst()).sku }, list_suggestions: {}, list_anomalies: {}, get_models: {} };
 
     for (const tool of buildTools({ db: guarded, aiClient: getAiClient })) {
       const parsed = tool.parameters.parse(args[tool.name]);
       const out = await tool.run(parsed);
 
       expect({ tool: tool.name, error: out.error }).toEqual({ tool: tool.name, error: undefined });
+    }
+
+    // the branches that only run when the AI service is down must not write either
+    fakeAi.state.down = true;
+    for (const name of ["get_days_of_cover", "get_forecast"]) {
+      const tool = buildTools({ db: guarded, aiClient: getAiClient }).find((t) => t.name === name);
+
+      await tool.run(tool.parameters.parse(args[name]));
     }
 
     expect(await snapshot()).toEqual(before);
@@ -152,7 +160,7 @@ describe("POST /ai/ask", () => {
 
     const toolMessage = seen[1].messages.find((m) => m.role === "tool");
     expect(JSON.parse(toolMessage.content)).toEqual({ total: 1, items: [{ sku: s.product.sku, name: "Cabin Air Filter", warehouse: s.warehouse.code, onHand: 4, reserved: 1, available: 3, reorderLevel: 10 }] });
-    expect(seen[0].tools.map((t) => t.function.name)).toEqual(["get_low_stock", "get_stock", "get_forecast", "list_suggestions", "list_anomalies", "get_models"]);
+    expect(seen[0].tools.map((t) => t.function.name)).toEqual(["get_low_stock", "get_stock", "get_forecast", "get_days_of_cover", "list_suggestions", "list_anomalies", "get_models"]);
     expect(seen[0].messages[0].content).toBe(SYSTEM);
 
     const audit = await prisma.aiAuditLog.findMany({ where: { eventType: "ASSISTANT_QUESTION" } });
@@ -280,5 +288,117 @@ describe("POST /ai/ask", () => {
     expect((await ask("   ")).status).toBe(400);
     expect((await ask("x".repeat(501))).status).toBe(400);
     expect((await api().post("/api/v1/ai/ask").send({ question: "ok", tools: ["delete"] })).status).toBe(400);
+  });
+});
+
+describe("get_days_of_cover", () => {
+  const { daysOfCover } = require("../../src/modules/ai/assistant/tools");
+
+  const stockRow = async (quantity, daily, { reserved = 0, product = {}, warehouse } = {}) => {
+    const s = await f.stockScenario({ quantity, reserved, product, ...(warehouse && { warehouse }) });
+
+    if (daily !== null) fakeAi.setForecast(s.product.id, s.warehouse.id, { dailyMean: daily, sigma: 1 });
+
+    return s;
+  };
+  const coverTool = () => buildTools({ db: prisma, aiClient: getAiClient }).find((t) => t.name === "get_days_of_cover");
+  const cover = (args = {}) => coverTool().run(coverTool().parameters.parse(args));
+
+  it("computes days until the forecast demand uses up the available stock", () => {
+    expect(daysOfCover(20, Array(30).fill(5))).toBe(4);
+    expect(daysOfCover(7, [5, 5, 5])).toBe(1.4);
+    expect(daysOfCover(5, [5])).toBe(1);
+    expect(daysOfCover(0, [3])).toBe(0);
+    expect(daysOfCover(-2, [3])).toBe(0);
+    expect(daysOfCover(100, Array(30).fill(2))).toBeNull(); // 60 units needed in 30 days: lasts longer
+    expect(daysOfCover(10, Array(30).fill(0))).toBeNull(); // no demand: never runs out in the horizon
+    expect(daysOfCover(3, [0, 0, 5])).toBe(2.6);
+  });
+
+  it("ranks by days of cover, soonest first, using available stock (on hand minus reserved)", async () => {
+    const slow = await stockRow(100, 2); // 50 days -> beyond horizon
+    const fast = await stockRow(30, 10); // 3 days
+    const reservedHeavy = await stockRow(50, 5, { reserved: 40 }); // available 10 -> 2 days
+    const none = await stockRow(10, null); // no history in the AI service
+
+    const out = await cover();
+
+    expect(out).toMatchObject({ forecastAvailable: true, horizonDays: 30, withoutForecast: 1 });
+    expect(out.items.map((i) => [i.sku, i.daysOfCover])).toEqual([[reservedHeavy.product.sku, 2], [fast.product.sku, 3], [slow.product.sku, null]]);
+    expect(out.items[2]).toMatchObject({ lastsBeyondHorizon: true });
+    expect(out.items[0]).toMatchObject({ available: 10, forecastUnitsPerDay: 5, model: "ML" });
+    expect(out.items.map((i) => i.sku)).not.toContain(none.product.sku);
+  });
+
+  it("shows open purchase orders to the warehouse, without letting them change the days of cover", async () => {
+    const s = await stockRow(20, 5);
+    const sup = await f.createSupplier();
+    await f.createPurchaseOrder({ supplierId: sup.id, destinationWarehouseId: s.warehouse.id, items: [{ productId: s.product.id, quantity: 100, receivedQuantity: 30 }] });
+
+    const out = await cover();
+
+    expect(out.items[0]).toMatchObject({ daysOfCover: 4, openOrderUnitsToThisWarehouse: 70 });
+    expect(out.note).toMatch(/ignore open purchase orders/);
+  });
+
+  it("honours the limit and the warehouse filter, and rejects an unknown warehouse", async () => {
+    const a = await stockRow(10, 5);
+    await stockRow(20, 5);
+    await stockRow(30, 5);
+
+    expect((await cover({ limit: 2 })).items).toHaveLength(2);
+    expect((await cover({ warehouseCode: a.warehouse.code })).items.map((i) => i.sku)).toEqual([a.product.sku]);
+    expect(await cover({ warehouseCode: "NOPE" })).toEqual({ error: "No such warehouse" });
+  });
+
+  it("when the AI service is down it says so and falls back to the low-stock list", async () => {
+    const low = await f.stockScenario({ quantity: 4, product: { reorderLevel: 10 } });
+    await f.stockScenario({ quantity: 500, product: { reorderLevel: 10 } });
+    fakeAi.state.down = true;
+
+    const out = await cover();
+
+    expect(out.forecastAvailable).toBe(false);
+    expect(out.message).toMatch(/forecasting service is unavailable/);
+    expect(out.message).toMatch(/not a forecast/);
+    expect(out.fallback.total).toBe(1);
+    expect(out.fallback.items[0]).toMatchObject({ sku: low.product.sku, available: 4, reorderLevel: 10 });
+    expect(out).not.toHaveProperty("items");
+  });
+
+  it("reaches the model through /ai/ask, including the fallback when forecasting is down", async () => {
+    const low = await f.stockScenario({ quantity: 2, product: { reorderLevel: 10 } });
+    fakeAi.state.down = true;
+    const toolResults = [];
+    llm.state.reply = (req) => {
+      const tool = req.messages.find((m) => m.role === "tool");
+
+      if (tool) {
+        toolResults.push(JSON.parse(tool.content));
+
+        return say("The forecast is unavailable; by reorder level the lowest is " + low.product.sku);
+      }
+
+      return call("get_days_of_cover", {});
+    };
+
+    const res = await ask("Which products will run out soonest?");
+
+    expect(res.body.data.toolCalls.map((c) => c.name)).toEqual(["get_days_of_cover"]);
+    expect(toolResults[0].forecastAvailable).toBe(false);
+    expect(toolResults[0].fallback.items[0].sku).toBe(low.product.sku);
+    expect(res.body.data.answer).toMatch(/forecast is unavailable/);
+    expect(llm.state.requests[0].messages[0].content).toMatch(/get_days_of_cover/);
+  });
+
+  it("changes nothing in the database", async () => {
+    await stockRow(10, 5);
+    const before = await snapshot();
+
+    await cover();
+    fakeAi.state.down = true;
+    await cover();
+
+    expect(await snapshot()).toEqual(before);
   });
 });

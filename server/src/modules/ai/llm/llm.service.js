@@ -8,19 +8,25 @@ const MINUTE_MS = 60 * 1000;
 // Sliding one-minute window in memory; the daily cap counts today's LLM_CALL audit rows, so it
 // survives restarts. Both are below the provider's free tier on purpose (NFR-015). With several
 // server instances each keeps its own minute window; the daily count is shared.
+//
+// Capacity is reserved for people: background work (explanations generated after a run or a sync)
+// may use at most half of the per-minute budget, so the assistant and on-demand explanations always
+// have headroom, however large the background batch is.
 const createRateLimiter = ({ perMinute, perDay, now = Date.now, callsToday }) => {
-  let recent = [];
+  let recent = []; // every call in the window: { at, background }
+  const backgroundShare = Math.max(1, Math.floor(perMinute / 2));
 
   return {
-    async tryAcquire() {
+    async tryAcquire({ background = false } = {}) {
       const t = now();
 
-      recent = recent.filter((at) => t - at < MINUTE_MS);
+      recent = recent.filter((call) => t - call.at < MINUTE_MS);
 
       if (recent.length >= perMinute) return "RATE_PER_MINUTE";
+      if (background && recent.filter((call) => call.background).length >= backgroundShare) return "RATE_BACKGROUND_RESERVE";
       if ((await callsToday()) >= perDay) return "RATE_PER_DAY";
 
-      recent.push(t);
+      recent.push({ at: t, background });
 
       return null;
     },
@@ -38,9 +44,9 @@ const createLlmService = ({ providers, limiter, audit = writeAudit, now = Date.n
   enabled: providers.length > 0,
   providers,
 
-  async complete({ messages, tools, maxTokens, temperature }, { purpose, actorUserId = null } = {}) {
+  async complete({ messages, tools, maxTokens, temperature }, { purpose, actorUserId = null, background = false } = {}) {
     for (const provider of providers) {
-      const blocked = await limiter.tryAcquire();
+      const blocked = await limiter.tryAcquire({ background });
 
       if (blocked) {
         await audit(null, { eventType: "LLM_SKIPPED", actorUserId, payload: { provider: provider.name, model: provider.model, purpose, reason: blocked } }).catch(() => {});
