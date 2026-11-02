@@ -29,6 +29,8 @@ const MOUNTS = [
 // routes that name their own roles (the router has no single write list)
 const PER_ROUTE_WRITES = {
   "POST /replenishment/run": roles.PROCUREMENT,
+  "POST /suggestions/:id/approve": roles.PROCUREMENT,
+  "POST /suggestions/:id/reject": roles.PROCUREMENT,
   "POST /requisitions": roles.PROCUREMENT,
   "POST /requisitions/:id/submit": roles.PROCUREMENT,
   "POST /requisitions/:id/approve": roles.PROCUREMENT,

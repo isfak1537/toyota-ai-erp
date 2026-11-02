@@ -1,4 +1,6 @@
 const replenishment = require("../modules/ai/replenishment.service");
+const suggestions = require("../modules/ai/suggestion.service");
+const { parseId } = require("../utils/ids");
 const { parsePagination, toPagination } = require("../utils/pagination");
 const { ValidationError } = require("../errors/app-error");
 const { fieldDetails } = require("../utils/zod-details");
@@ -36,4 +38,24 @@ const listSuggestions = async (req, res) => {
   });
 };
 
-module.exports = { runReplenishment, listSuggestions };
+const approveSuggestion = async (req, res) => {
+  const data = await suggestions.approveSuggestion(parseId(req.params.id, "Invalid suggestion ID"), req.user);
+
+  res.status(data.idempotent ? 200 : 201).json({
+    success: true,
+    message: data.idempotent ? "Suggestion was already approved" : "Suggestion approved; draft requisition created",
+    data,
+  });
+};
+
+const rejectSuggestion = async (req, res) => {
+  const data = await suggestions.rejectSuggestion(parseId(req.params.id, "Invalid suggestion ID"), req.body.reason, req.user);
+
+  res.json({
+    success: true,
+    message: data.idempotent ? "Suggestion was already rejected" : "Suggestion rejected",
+    data,
+  });
+};
+
+module.exports = { runReplenishment, listSuggestions, approveSuggestion, rejectSuggestion };

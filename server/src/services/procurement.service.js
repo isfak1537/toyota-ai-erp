@@ -1126,6 +1126,7 @@ const getPurchaseInvoices = async ({ skip = 0, take = 20 } = {}) => {
 };
 
 module.exports = {
+  makeNumber,
   createRequisition,
   getRequisitions,
   submitRequisition,
