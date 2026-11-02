@@ -4,3 +4,9 @@ node_modules/
 !.env.example
 .DS_Store
 server/src/generated/
+ai-service/.venv/
+ai-service/models/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
