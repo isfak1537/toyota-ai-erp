@@ -350,6 +350,7 @@ const adjustStock = async ({
   });
 };
 
+
 const reserveStock = async ({
   productId,
   warehouseId,
@@ -365,44 +366,25 @@ const reserveStock = async ({
   return prisma.$transaction(async (tx) => {
     await validateProductAndWarehouse(tx, productId, warehouseId);
 
-    const inventory = await tx.inventory.findUnique({
-      where: {
-        productId_warehouseId: {
-          productId,
-          warehouseId,
-        },
-      },
+    const updated = await inventoryRepository.applyDelta(tx, {
+      productId,
+      warehouseId,
+      reservedDelta: quantity,
     });
 
-    if (!inventory) {
-      throw new NotFoundError("Inventory record not found");
+    if (!updated) {
+      await failStockChange(tx, productId, warehouseId, (current) => {
+        const availableQuantity = current.quantity - current.reservedQuantity;
+
+        return new ConflictError(
+          `Insufficient available stock for reservation. Available: ${availableQuantity}, requested: ${quantity}`
+        );
+      });
     }
 
-    const availableQuantity =
-      inventory.quantity - inventory.reservedQuantity;
-
-    if (quantity > availableQuantity) {
-      throw new ConflictError(
-        `Insufficient available stock for reservation. Available: ${availableQuantity}, requested: ${quantity}`
-      );
-    }
-
-    const newReservedQuantity =
-      inventory.reservedQuantity + quantity;
-
-    const updatedInventory = await tx.inventory.update({
-      where: { id: inventory.id },
-      data: {
-        reservedQuantity: newReservedQuantity,
-      },
-      include: {
-        product: true,
-        warehouse: {
-          include: {
-            factory: true,
-          },
-        },
-      },
+    const inventory = await tx.inventory.findUnique({
+      where: { id: updated.id },
+      include: inventoryInclude,
     });
 
     const transaction = await tx.inventoryTransaction.create({
@@ -411,7 +393,7 @@ const reserveStock = async ({
         warehouseId,
         type: "RESERVATION",
         quantity: 0,
-        balanceAfter: inventory.quantity,
+        balanceAfter: updated.quantity,
         referenceType: referenceType || "MANUAL_RESERVATION",
         referenceId: referenceId || null,
         reason: reason || `Reserved ${quantity} units`,
@@ -419,11 +401,12 @@ const reserveStock = async ({
     });
 
     return {
-      inventory: updatedInventory,
+      inventory,
       transaction,
     };
   });
 };
+
 
 const releaseStock = async ({
   productId,
@@ -438,41 +421,27 @@ const releaseStock = async ({
   }
 
   return prisma.$transaction(async (tx) => {
-    const inventory = await tx.inventory.findUnique({
-      where: {
-        productId_warehouseId: {
-          productId,
-          warehouseId,
-        },
-      },
+    const updated = await inventoryRepository.applyDelta(tx, {
+      productId,
+      warehouseId,
+      reservedDelta: -quantity,
     });
 
-    if (!inventory) {
-      throw new NotFoundError("Inventory record not found");
-    }
-
-    if (quantity > inventory.reservedQuantity) {
-      throw new ConflictError(
-        `Cannot release ${quantity}. Reserved quantity: ${inventory.reservedQuantity}`
+    if (!updated) {
+      await failStockChange(
+        tx,
+        productId,
+        warehouseId,
+        (current) =>
+          new ConflictError(
+            `Cannot release ${quantity}. Reserved quantity: ${current.reservedQuantity}`
+          )
       );
     }
 
-    const newReservedQuantity =
-      inventory.reservedQuantity - quantity;
-
-    const updatedInventory = await tx.inventory.update({
-      where: { id: inventory.id },
-      data: {
-        reservedQuantity: newReservedQuantity,
-      },
-      include: {
-        product: true,
-        warehouse: {
-          include: {
-            factory: true,
-          },
-        },
-      },
+    const inventory = await tx.inventory.findUnique({
+      where: { id: updated.id },
+      include: inventoryInclude,
     });
 
     const transaction = await tx.inventoryTransaction.create({
@@ -481,7 +450,7 @@ const releaseStock = async ({
         warehouseId,
         type: "RELEASE",
         quantity: 0,
-        balanceAfter: inventory.quantity,
+        balanceAfter: updated.quantity,
         referenceType: referenceType || "MANUAL_RELEASE",
         referenceId: referenceId || null,
         reason: reason || `Released ${quantity} units`,
@@ -489,7 +458,7 @@ const releaseStock = async ({
     });
 
     return {
-      inventory: updatedInventory,
+      inventory,
       transaction,
     };
   });
