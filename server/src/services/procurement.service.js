@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const inventoryService = require("./inventory.service");
 const {
   ConflictError,
   NotFoundError,
@@ -6,9 +8,7 @@ const {
 } = require("../errors/app-error");
 
 const makeNumber = (prefix) => {
-  return `${prefix}-${Date.now()}-${Math.floor(
-    100 + Math.random() * 900
-  )}`;
+  return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 };
 
 const toId = (value, fieldName) => {
@@ -530,187 +530,164 @@ const createGoodsReceipt = async (data) => {
     );
   }
 
-  const purchaseOrder =
-    await prisma.purchaseOrder.findUnique({
-      where: {
-        id: parsedPurchaseOrderId,
-      },
-      include: {
-        items: true,
-      },
-    });
-
-  if (!purchaseOrder) {
-    throw new NotFoundError("Purchase order not found");
-  }
-
-  if (
-    !["APPROVED", "PARTIALLY_RECEIVED"].includes(
-      purchaseOrder.status
-    )
-  ) {
-    throw new ConflictError(
-      "Goods receipt requires an APPROVED or PARTIALLY_RECEIVED purchase order"
-    );
-  }
-
-  const warehouse = await prisma.warehouse.findFirst({
-    where: {
-      id: parsedWarehouseId,
-      isActive: true,
-    },
-  });
-
-  if (!warehouse) {
-    throw new NotFoundError("Active warehouse not found");
-  }
-
-  const receiptProductIds = new Set();
-  const receiptItems = [];
-
-  for (const item of items) {
-    const purchaseOrderItemId = toId(
+  const requestedItems = items.map((item) => ({
+    purchaseOrderItemId: toId(
       item.purchaseOrderItemId,
       "purchaseOrderItemId"
-    );
-
-    const productId = toId(
-      item.productId,
-      "productId"
-    );
-
-    const quantity = toPositiveInteger(
-      item.quantity,
-      "quantity"
-    );
-
-    const poItem = purchaseOrder.items.find(
-      (line) => line.id === purchaseOrderItemId
-    );
-
-    if (!poItem) {
-      throw new NotFoundError(
-        `Purchase order item not found: ${purchaseOrderItemId}`
-      );
-    }
-
-    if (poItem.productId !== productId) {
-      throw new ValidationError(
-        `Product mismatch for purchase order item ${purchaseOrderItemId}`
-      );
-    }
-
-    if (receiptProductIds.has(productId)) {
-      throw new ValidationError(
-        `Product ${productId} appears more than once in the goods receipt`
-      );
-    }
-
-    receiptProductIds.add(productId);
-
-    const remainingQuantity =
-      poItem.quantity - poItem.receivedQuantity;
-
-    if (remainingQuantity <= 0) {
-      throw new ConflictError(
-        `Purchase order item ${purchaseOrderItemId} has already been fully received`
-      );
-    }
-
-    if (quantity > remainingQuantity) {
-      throw new ConflictError(
-        `Cannot receive ${quantity}. Remaining quantity for PO item ${purchaseOrderItemId} is ${remainingQuantity}`
-      );
-    }
-
-    receiptItems.push({
-      purchaseOrderItemId,
-      productId,
-      quantity,
-    });
-  }
+    ),
+    productId: toId(item.productId, "productId"),
+    quantity: toPositiveInteger(item.quantity, "quantity"),
+  }));
 
   return prisma.$transaction(async (tx) => {
+    // Lock the purchase order first. Receipts for one PO are serialised, so the
+    // remaining-quantity checks below and the PO status update at the end see
+    // every earlier receipt (D-03). Receipts always take this lock before any
+    // inventory row lock, and nothing takes them in the opposite order.
+    const locked = await tx.$queryRaw`
+      SELECT "id", "status" FROM "PurchaseOrder"
+      WHERE "id" = ${parsedPurchaseOrderId}::int
+      FOR UPDATE
+    `;
+
+    if (locked.length === 0) {
+      throw new NotFoundError("Purchase order not found");
+    }
+
+    if (
+      !["APPROVED", "PARTIALLY_RECEIVED"].includes(
+        locked[0].status
+      )
+    ) {
+      throw new ConflictError(
+        "Goods receipt requires an APPROVED or PARTIALLY_RECEIVED purchase order"
+      );
+    }
+
+    const warehouse = await tx.warehouse.findFirst({
+      where: {
+        id: parsedWarehouseId,
+        isActive: true,
+      },
+    });
+
+    if (!warehouse) {
+      throw new NotFoundError("Active warehouse not found");
+    }
+
+    const purchaseOrderItems = await tx.purchaseOrderItem.findMany({
+      where: {
+        purchaseOrderId: parsedPurchaseOrderId,
+      },
+    });
+
+    const receiptProductIds = new Set();
+    const lines = [];
+
+    for (const requested of requestedItems) {
+      const { purchaseOrderItemId, productId, quantity } = requested;
+
+      const poItem = purchaseOrderItems.find(
+        (line) => line.id === purchaseOrderItemId
+      );
+
+      if (!poItem) {
+        throw new NotFoundError(
+          `Purchase order item not found: ${purchaseOrderItemId}`
+        );
+      }
+
+      if (poItem.productId !== productId) {
+        throw new ValidationError(
+          `Product mismatch for purchase order item ${purchaseOrderItemId}`
+        );
+      }
+
+      if (receiptProductIds.has(productId)) {
+        throw new ValidationError(
+          `Product ${productId} appears more than once in the goods receipt`
+        );
+      }
+
+      receiptProductIds.add(productId);
+
+      const remainingQuantity =
+        poItem.quantity - poItem.receivedQuantity;
+
+      if (remainingQuantity <= 0) {
+        throw new ConflictError(
+          `Purchase order item ${purchaseOrderItemId} has already been fully received`
+        );
+      }
+
+      if (quantity > remainingQuantity) {
+        throw new ConflictError(
+          `Cannot receive ${quantity}. Remaining quantity for PO item ${purchaseOrderItemId} is ${remainingQuantity}`
+        );
+      }
+
+      lines.push({ ...requested, orderedQuantity: poItem.quantity });
+    }
+
     const receipt = await tx.goodsReceipt.create({
       data: {
         receiptNumber: makeNumber("GR"),
-        purchaseOrderId: purchaseOrder.id,
+        purchaseOrderId: parsedPurchaseOrderId,
         warehouseId: warehouse.id,
         status: "RECEIVED",
         notes: notes || null,
         items: {
-          create: receiptItems,
+          create: lines.map(
+            ({ purchaseOrderItemId, productId, quantity }) => ({
+              purchaseOrderItemId,
+              productId,
+              quantity,
+            })
+          ),
         },
       },
     });
 
-    for (const item of receiptItems) {
-      const inventory =
-        await tx.inventory.findUnique({
-          where: {
-            productId_warehouseId: {
-              productId: item.productId,
-              warehouseId: warehouse.id,
-            },
-          },
-        });
+    // Inventory rows are touched in productId order so concurrent receipts and
+    // transfers always lock rows in the same order.
+    const ordered = [...lines].sort((a, b) => a.productId - b.productId);
 
-      let balanceAfter;
-
-      if (inventory) {
-        balanceAfter =
-          inventory.quantity + item.quantity;
-
-        await tx.inventory.update({
-          where: {
-            id: inventory.id,
-          },
-          data: {
-            quantity: balanceAfter,
-          },
-        });
-      } else {
-        balanceAfter = item.quantity;
-
-        await tx.inventory.create({
-          data: {
-            productId: item.productId,
-            warehouseId: warehouse.id,
-            quantity: item.quantity,
-            reservedQuantity: 0,
-          },
-        });
-      }
-
-      await tx.inventoryTransaction.create({
-        data: {
-          productId: item.productId,
-          warehouseId: warehouse.id,
-          type: "RECEIPT",
-          quantity: item.quantity,
-          balanceAfter,
-          referenceType: "GOODS_RECEIPT",
-          referenceId: receipt.id,
-          reason: `Goods receipt ${receipt.receiptNumber}`,
-        },
-      });
-
-      await tx.purchaseOrderItem.update({
+    for (const line of ordered) {
+      // Atomic guard: only claim the quantity if it still fits the ordered one.
+      const claimed = await tx.purchaseOrderItem.updateMany({
         where: {
-          id: item.purchaseOrderItemId,
+          id: line.purchaseOrderItemId,
+          receivedQuantity: {
+            lte: line.orderedQuantity - line.quantity,
+          },
         },
         data: {
           receivedQuantity: {
-            increment: item.quantity,
+            increment: line.quantity,
           },
         },
+      });
+
+      if (claimed.count !== 1) {
+        throw new ConflictError(
+          `Cannot receive ${line.quantity}. Remaining quantity for PO item ${line.purchaseOrderItemId} is no longer sufficient`
+        );
+      }
+
+      await inventoryService.receiveIntoWarehouseInTx(tx, {
+        productId: line.productId,
+        warehouseId: warehouse.id,
+        quantity: line.quantity,
+        referenceType: "GOODS_RECEIPT",
+        referenceId: receipt.id,
+        reason: `Goods receipt ${receipt.receiptNumber}`,
       });
     }
 
     const updatedItems =
       await tx.purchaseOrderItem.findMany({
         where: {
-          purchaseOrderId: purchaseOrder.id,
+          purchaseOrderId: parsedPurchaseOrderId,
         },
       });
 
@@ -719,16 +696,14 @@ const createGoodsReceipt = async (data) => {
         item.receivedQuantity >= item.quantity
     );
 
-    const newStatus = allReceived
-      ? "RECEIVED"
-      : "PARTIALLY_RECEIVED";
-
     await tx.purchaseOrder.update({
       where: {
-        id: purchaseOrder.id,
+        id: parsedPurchaseOrderId,
       },
       data: {
-        status: newStatus,
+        status: allReceived
+          ? "RECEIVED"
+          : "PARTIALLY_RECEIVED",
       },
     });
 

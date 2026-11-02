@@ -219,6 +219,35 @@ const receiveStock = async ({
 };
 
 
+// Receipt inside the caller's transaction, for other modules (goods receipt).
+// Creates the inventory row if the warehouse has none yet; either way it is one
+// atomic statement, and the ledger balance comes from the returned row.
+const receiveIntoWarehouseInTx = async (
+  tx,
+  { productId, warehouseId, quantity, referenceType, referenceId, reason }
+) => {
+  const updated = await inventoryRepository.increaseOrCreate(tx, {
+    productId,
+    warehouseId,
+    quantity,
+  });
+
+  const transaction = await tx.inventoryTransaction.create({
+    data: {
+      productId,
+      warehouseId,
+      type: "RECEIPT",
+      quantity,
+      balanceAfter: updated.quantity,
+      referenceType: referenceType || "MANUAL_RECEIPT",
+      referenceId: referenceId || null,
+      reason: reason || null,
+    },
+  });
+
+  return { inventory: updated, transaction };
+};
+
 const issueStock = async ({
   productId,
   warehouseId,
@@ -517,6 +546,7 @@ const getLowStock = async () => {
 };
 
 module.exports = {
+  receiveIntoWarehouseInTx,
   createInventory,
   getAllInventory,
   getInventoryById,
