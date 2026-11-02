@@ -14,6 +14,7 @@ const inventoryRoutes = require("./routes/inventory.routes");
 const stockTransferRoutes = require("./routes/stock-transfer.routes");
 const procurementRoutes = require("./routes/procurement.routes");
 const salesOrderRoutes = require("./routes/sales-order.routes");
+const authRoutes = require("./routes/auth.routes");
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use(
 );
 
 app.use(express.json());
+app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/sales-orders", salesOrderRoutes);
 app.use("/api/v1/companies", companyRoutes);
 app.use("/api/v1/factories", factoryRoutes);

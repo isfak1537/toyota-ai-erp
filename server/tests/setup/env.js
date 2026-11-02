@@ -15,3 +15,6 @@ assertSafeTestDatabase({
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 process.env.NODE_ENV = "test";
+
+// A fixed value for tests only; real secrets come from the environment.
+process.env.JWT_SECRET = "test-only-jwt-secret-0123456789abcdef0123456789";
