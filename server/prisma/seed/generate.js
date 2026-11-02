@@ -188,11 +188,12 @@ const main = async (argv, deps = {}) => {
     log("\nInserted:");
     log(table(Object.entries(inserted)));
 
-    if (typeof deps.afterApply === "function") {
-      return await deps.afterApply({ prisma, log });
-    }
+    // prove the load is consistent: inventory = last ledger balance, chains, documents
+    const { run } = require("../../scripts/reconcile");
 
-    return 0;
+    log("");
+
+    return await run(prisma, { scope: "seed" }, log);
   } catch (error) {
     log(`Failed: ${error.message}`);
     return 1;
