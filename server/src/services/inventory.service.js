@@ -196,6 +196,7 @@ const receiveStock = async ({
   referenceType,
   referenceId,
   reason,
+  actorId,
 }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw new ValidationError("Receipt quantity must be a positive integer");
@@ -226,6 +227,7 @@ const receiveStock = async ({
 
     const transaction = await tx.inventoryTransaction.create({
       data: {
+        createdById: actorId ?? null,
         productId,
         warehouseId,
         type: "RECEIPT",
@@ -250,7 +252,7 @@ const receiveStock = async ({
 // atomic statement, and the ledger balance comes from the returned row.
 const receiveIntoWarehouseInTx = async (
   tx,
-  { productId, warehouseId, quantity, referenceType, referenceId, reason }
+  { productId, warehouseId, quantity, referenceType, referenceId, reason, actorId }
 ) => {
   const updated = await inventoryRepository.increaseOrCreate(tx, {
     productId,
@@ -260,6 +262,7 @@ const receiveIntoWarehouseInTx = async (
 
   const transaction = await tx.inventoryTransaction.create({
     data: {
+      createdById: actorId ?? null,
       productId,
       warehouseId,
       type: "RECEIPT",
@@ -281,6 +284,7 @@ const issueStock = async ({
   referenceType,
   referenceId,
   reason,
+  actorId,
 }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw new ValidationError("Issue quantity must be a positive integer");
@@ -312,6 +316,7 @@ const issueStock = async ({
 
     const transaction = await tx.inventoryTransaction.create({
       data: {
+        createdById: actorId ?? null,
         productId,
         warehouseId,
         type: "ISSUE",
@@ -337,6 +342,7 @@ const adjustStock = async ({
   referenceType,
   referenceId,
   reason,
+  actorId,
 }) => {
   if (!Number.isInteger(quantity) || quantity === 0) {
     throw new ValidationError("Adjustment quantity must be a non-zero integer");
@@ -370,6 +376,7 @@ const adjustStock = async ({
 
     const transaction = await tx.inventoryTransaction.create({
       data: {
+        createdById: actorId ?? null,
         productId,
         warehouseId,
         type: "ADJUSTMENT",
@@ -395,6 +402,7 @@ const reserveStock = async ({
   referenceType,
   referenceId,
   reason,
+  actorId,
 }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw new ValidationError("Reservation quantity must be a positive integer");
@@ -426,6 +434,7 @@ const reserveStock = async ({
 
     const transaction = await tx.inventoryTransaction.create({
       data: {
+        createdById: actorId ?? null,
         productId,
         warehouseId,
         type: "RESERVATION",
@@ -452,6 +461,7 @@ const releaseStock = async ({
   referenceType,
   referenceId,
   reason,
+  actorId,
 }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
     throw new ValidationError("Release quantity must be a positive integer");
@@ -483,6 +493,7 @@ const releaseStock = async ({
 
     const transaction = await tx.inventoryTransaction.create({
       data: {
+        createdById: actorId ?? null,
         productId,
         warehouseId,
         type: "RELEASE",

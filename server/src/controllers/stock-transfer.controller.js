@@ -2,7 +2,7 @@ const stockTransferService = require("../services/stock-transfer.service");
 const { parsePagination, toPagination } = require("../utils/pagination");
 const { parseId } = require("../utils/ids");
 const completeTransfer = async (req, res) => {
-  const data = await stockTransferService.completeTransfer(req.body);
+  const data = await stockTransferService.completeTransfer({ ...req.body, actorId: req.user.id });
 
   res.status(201).json({
     success: true,

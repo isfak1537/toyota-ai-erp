@@ -16,6 +16,7 @@ const completeTransfer = async ({
   toWarehouseId,
   items,
   notes,
+  actorId,
 }) => {
   if (fromWarehouseId === toWarehouseId) {
     throw new ValidationError("Source and destination warehouses must be different");
@@ -189,6 +190,7 @@ const completeTransfer = async ({
           {
             productId: item.productId,
             warehouseId: fromWarehouseId,
+            createdById: actorId ?? null,
             type: "TRANSFER_OUT",
             quantity: -item.quantity,
             balanceAfter: item.sourceBalanceAfter,
@@ -199,6 +201,7 @@ const completeTransfer = async ({
           {
             productId: item.productId,
             warehouseId: toWarehouseId,
+            createdById: actorId ?? null,
             type: "TRANSFER_IN",
             quantity: item.quantity,
             balanceAfter: item.destinationBalanceAfter,

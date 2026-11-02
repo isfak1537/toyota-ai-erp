@@ -45,7 +45,7 @@ const toDateOrNull = (value, fieldName) => {
   return date;
 };
 
-const createRequisition = async (data) => {
+const createRequisition = async (data, actorId) => {
   const {
     requesterName,
     supplierId,
@@ -128,6 +128,7 @@ const createRequisition = async (data) => {
   return prisma.purchaseRequisition.create({
     data: {
       requisitionNumber: makeNumber("PR"),
+      createdById: actorId ?? null,
       requesterName: requesterName.trim(),
       supplierId: parsedSupplierId,
       status: "DRAFT",
@@ -219,7 +220,7 @@ const submitRequisition = async (id) => {
 };
 
 
-const approveRequisition = async (id) => {
+const approveRequisition = async (id, actorId) => {
   const requisitionId = toId(id, "requisitionId");
 
   // One conditional update: of any number of concurrent calls exactly one
@@ -231,6 +232,7 @@ const approveRequisition = async (id) => {
     },
     data: {
       status: "APPROVED",
+      approvedById: actorId ?? null,
     },
   });
 
@@ -511,7 +513,7 @@ const getPurchaseOrders = async ({ skip = 0, take = 20 } = {}) => {
 };
 
 
-const approvePurchaseOrder = async (id) => {
+const approvePurchaseOrder = async (id, actorId) => {
   const purchaseOrderId = toId(id, "purchaseOrderId");
 
   // One conditional update: of any number of concurrent calls exactly one
@@ -523,6 +525,7 @@ const approvePurchaseOrder = async (id) => {
     },
     data: {
       status: "APPROVED",
+      approvedById: actorId ?? null,
     },
   });
 
@@ -559,7 +562,7 @@ const approvePurchaseOrder = async (id) => {
   });
 };
 
-const createGoodsReceipt = async (data) => {
+const createGoodsReceipt = async (data, actorId) => {
   const {
     purchaseOrderId,
     warehouseId,
@@ -688,6 +691,7 @@ const createGoodsReceipt = async (data) => {
         purchaseOrderId: parsedPurchaseOrderId,
         warehouseId: warehouse.id,
         status: "RECEIVED",
+        createdById: actorId ?? null,
         notes: notes || null,
         items: {
           create: lines.map(
@@ -734,6 +738,7 @@ const createGoodsReceipt = async (data) => {
         referenceType: "GOODS_RECEIPT",
         referenceId: receipt.id,
         reason: `Goods receipt ${receipt.receiptNumber}`,
+        actorId,
       });
     }
 
