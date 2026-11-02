@@ -101,8 +101,10 @@ Keep `npm test` passing.
   middleware, app/index split), test database harness (1.3), D-02 (atomic stock changes for
   receive, issue, adjust, reserve, release and transfer, with concurrency tests and CHECK
   constraints), D-03 (goods receipt in one locked transaction), D-06 (Decimal procurement money),
-  D-07 (Zod writes and pagination) for the inventory, stock-transfer and procurement modules.
-  Open for the P0 gate: branch review. Known defects: see SRS section 13.
+  D-07 (Zod writes and pagination) for the inventory, stock-transfer and procurement modules, and
+  the branch self-review fixes (atomic status transitions, guarded inventory delete, strict ids).
+  The P0 gate review is complete; waiting for the owner's confirmation before merge or tag.
+  Known defects: see SRS section 13.
 - Update this section when a phase gate passes.
 
 ### Pending verification
@@ -111,3 +113,21 @@ Keep `npm test` passing.
   not yet to the dev database: run `npm exec prisma -- migrate deploy` in `server/`.
 - Prisma's query engine runs nested `include` queries concurrently on one transaction connection;
   pg logs a deprecation warning that becomes an error in pg@9. Track upstream before upgrading pg.
+
+### Known gaps (not blocking the P0 gate)
+
+- No authentication or authorization yet: every endpoint is public until P4.
+- The other modules (product, category, company, factory, warehouse, supplier, supplier-product,
+  customer, sales-order) still use the legacy error bridge or their own try/catch; migrate them
+  to `AppError` and Zod when they are next touched. Product lists use `limit`, the new lists use
+  `pageSize` (both are accepted on the new lists).
+- Low-stock compares two tables' columns in JS, so it loads all inventory rows before paging;
+  move to SQL when data grows.
+- Business rules not yet defined: several POs can be created from one approved requisition and
+  quantity caps are per document, not cumulative; goods receipt does not re-check that the
+  product is still active.
+- Money inputs with more than 2 decimals are rounded half-up; the rounding policy needs finance
+  approval (SRS section 15).
+- Interactive transactions use Prisma's defaults (maxWait 2 s, timeout 5 s) and the pg pool its
+  default of 10 connections; P2028 never occurred in the parallel tests, but revisit both at
+  deployment (P7).
