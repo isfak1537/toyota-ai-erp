@@ -31,9 +31,10 @@ docs/          PRD, SRS, Build Plan (Markdown)
 # server
 cd server && npm install
 npm run dev                      # nodemon src/index.js (port 5001)
-npx prisma validate
-npx prisma migrate dev --name <name>   # only after showing me the schema diff
-npx prisma generate
+npm test                         # jest + supertest, tests/ (no DB needed yet)
+npm exec prisma -- validate
+npm exec prisma -- migrate dev --name <name>   # only after showing me the schema diff
+npm exec prisma -- generate
 npm run db:seed
 
 # client
@@ -46,13 +47,15 @@ cd ai-service && pip install -r requirements.txt && uvicorn app.main:app --reloa
 Always run Prisma from `server/` using the project's local binary (`npm exec prisma -- <cmd>` or
 `./node_modules/.bin/prisma <cmd>`), never a bare `npx` that may download another version.
 
-Add `npm test` scripts during P0 and keep them passing.
+Keep `npm test` passing.
 
 ## Architecture rules
 
 - Keep the layering: routes → controllers → services → repositories. Controllers stay thin.
 - Validate every write request with Zod.
 - Throw typed `AppError` subclasses; never decide HTTP status from error message text. The central error middleware maps errors to status codes.
+- Express 5 forwards thrown errors and rejected promises from async handlers to the error middleware. Controllers are plain `async` functions with no `try/catch` and no `asyncHandler`; just throw an `AppError` subclass.
+- Status mapping: 400 malformed input or static rule (`ValidationError`); 404 missing record (`NotFoundError`); 409 duplicate or state conflict such as insufficient stock, wrong workflow status, inactive entity (`ConflictError`).
 - Response envelope: `{ success, data, message, errors }`. List endpoints are paginated.
 - Money: Prisma `Decimal` and decimal arithmetic, never JavaScript float math.
 - Stock changes: only through inventory service operations, inside `prisma.$transaction`, using **atomic conditional updates** (e.g. `updateMany` with `where` on available quantity, then check `count`) or row locks. Never read-then-write quantities in JS.
@@ -92,5 +95,12 @@ Add `npm test` scripts during P0 and keep them passing.
 
 ## Current status
 
-- P0 not started. Known defects: see SRS section 13.
+- P0 in progress (branch `phase-0-fixes`). Done: repo hygiene, D-05 (typed errors, central error
+  middleware, app/index split) for inventory, stock-transfer and procurement. Open for the P0 gate:
+  D-02, D-03, D-06, D-07 and the test database. Known defects: see SRS section 13.
 - Update this section when a phase gate passes.
+
+### Pending verification
+
+- P2003 (foreign key) -> 409 is verified only with a synthetic error. Add a real FK-violation
+  integration test once the test database exists (D-02 task).
