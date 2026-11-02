@@ -1,3 +1,4 @@
+const { NotFoundError } = require("../errors/app-error");
 const supplierRepository = require("../repositories/supplier.repository");
 
 const createSupplier = async (data) => {
@@ -12,9 +13,7 @@ const getSupplierById = async (id) => {
   const supplier = await supplierRepository.getSupplierById(id);
 
   if (!supplier) {
-    const error = new Error("Supplier not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Supplier not found");
   }
 
   return supplier;

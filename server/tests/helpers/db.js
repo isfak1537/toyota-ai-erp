@@ -12,6 +12,12 @@ const assertConnectedToTestDatabase = async () => {
   }
 };
 
+// Every test starts with one ADMIN user (id 1, because the reset restarts identities)
+// so tests can call the protected API without logging in; see helpers/http.js.
+const BASELINE_ADMIN = { id: 1, name: "Baseline Admin", email: "baseline-admin@test.local", role: "ADMIN" };
+// bcrypt hash of a throwaway password (cost 4, tests only); nobody logs in as this user.
+const BASELINE_HASH = "$2b$04$S8C5/U1fltza0q5loxYBhe1w7HYIeZNn85tapnBnFUgxVfckBDy82";
+
 const resetDatabase = async () => {
   await assertConnectedToTestDatabase();
 
@@ -31,10 +37,18 @@ const resetDatabase = async () => {
   await prisma.$executeRawUnsafe(
     `TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`
   );
+
+  // no explicit id: the sequence (just restarted) hands out 1 and moves on, so later users get 2, 3, ...
+  const { id, ...fields } = BASELINE_ADMIN;
+  const created = await prisma.user.create({ data: { ...fields, passwordHash: BASELINE_HASH } });
+
+  if (created.id !== id) {
+    throw new Error(`Baseline admin got id ${created.id}, expected ${id}`);
+  }
 };
 
 const disconnect = async () => {
   await prisma.$disconnect();
 };
 
-module.exports = { prisma, resetDatabase, disconnect };
+module.exports = { prisma, resetDatabase, disconnect, BASELINE_ADMIN };

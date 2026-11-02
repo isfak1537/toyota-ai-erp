@@ -1,3 +1,4 @@
+const { NotFoundError, ValidationError } = require("../errors/app-error");
 const productRepository = require("../repositories/product.repository");
 
 const createProduct = async (data) => {
@@ -6,11 +7,9 @@ const createProduct = async (data) => {
     data.maxStock !== null &&
     data.maxStock < data.minStock
   ) {
-    const error = new Error(
+    throw new ValidationError(
       "Maximum stock cannot be less than minimum stock"
     );
-    error.statusCode = 400;
-    throw error;
   }
 
   return productRepository.createProduct(data);
@@ -56,9 +55,7 @@ const getProductById = async (id) => {
   const product = await productRepository.getProductById(id);
 
   if (!product) {
-    const error = new Error("Product not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Product not found");
   }
 
   return product;
@@ -82,11 +79,9 @@ const updateProduct = async (id, data) => {
     maxStock !== undefined &&
     maxStock < minStock
   ) {
-    const error = new Error(
+    throw new ValidationError(
       "Maximum stock cannot be less than minimum stock"
     );
-    error.statusCode = 400;
-    throw error;
   }
 
   return productRepository.updateProduct(id, data);

@@ -1,6 +1,6 @@
-const request = require("supertest");
 
 const app = require("../../src/app");
+const { authed } = require("../helpers/http");
 const procurementService = require("../../src/services/procurement.service");
 const { ConflictError, ValidationError } = require("../../src/errors/app-error");
 const { prisma, resetDatabase, disconnect } = require("../helpers/db");
@@ -117,7 +117,7 @@ describe("cumulative requisition cap on purchase orders (FR-014)", () => {
     const { requisition, order } = await setup(10);
     await order(10);
 
-    const res = await request(app)
+    const res = await authed(app)
       .post("/api/v1/procurement/purchase-orders")
       .send({
         supplierId: (await prisma.purchaseOrder.findFirst()).supplierId,

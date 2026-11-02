@@ -1,3 +1,4 @@
+const { NotFoundError } = require("../errors/app-error");
 const companyRepository = require("../repositories/company.repository");
 
 const createCompany = async (data) => {
@@ -12,9 +13,7 @@ const getCompanyById = async (id) => {
   const company = await companyRepository.getCompanyById(id);
 
   if (!company) {
-    const error = new Error("Company not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Company not found");
   }
 
   return company;

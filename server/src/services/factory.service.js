@@ -1,3 +1,4 @@
+const { NotFoundError, ValidationError } = require("../errors/app-error");
 const factoryRepository = require("../repositories/factory.repository");
 const companyRepository = require("../repositories/company.repository");
 
@@ -5,17 +6,13 @@ const createFactory = async (data) => {
   const company = await companyRepository.getCompanyById(data.companyId);
 
   if (!company) {
-    const error = new Error("Company not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Company not found");
   }
 
   if (!company.isActive) {
-    const error = new Error(
+    throw new ValidationError(
       "Cannot create factory under an inactive company"
     );
-    error.statusCode = 400;
-    throw error;
   }
 
   return factoryRepository.createFactory(data);
@@ -29,9 +26,7 @@ const getFactoryById = async (id) => {
   const factory = await factoryRepository.getFactoryById(id);
 
   if (!factory) {
-    const error = new Error("Factory not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Factory not found");
   }
 
   return factory;
@@ -44,17 +39,13 @@ const updateFactory = async (id, data) => {
     const company = await companyRepository.getCompanyById(data.companyId);
 
     if (!company) {
-      const error = new Error("Company not found");
-      error.statusCode = 404;
-      throw error;
+      throw new NotFoundError("Company not found");
     }
 
     if (!company.isActive) {
-      const error = new Error(
+      throw new ValidationError(
         "Cannot assign factory to an inactive company"
       );
-      error.statusCode = 400;
-      throw error;
     }
   }
 

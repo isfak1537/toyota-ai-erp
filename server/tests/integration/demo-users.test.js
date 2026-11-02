@@ -2,6 +2,8 @@ const { prisma, resetDatabase, disconnect } = require("../helpers/db");
 const { ensureDemoUsers, DEMO_USERS } = require("../../src/services/demo-users");
 const bcrypt = require("bcryptjs");
 
+const demoWhere = { email: { endsWith: "@demo.synthetic" } }; // the reset also creates one baseline admin
+
 beforeEach(resetDatabase);
 afterAll(disconnect);
 
@@ -15,7 +17,7 @@ const passwords = (suffix = "") => ({
 describe("ensureDemoUsers", () => {
   it("creates the four roles with hashed passwords from the environment", async () => {
     await ensureDemoUsers(passwords());
-    const users = await prisma.user.findMany({ orderBy: { id: "asc" } });
+    const users = await prisma.user.findMany({ where: demoWhere, orderBy: { id: "asc" } });
 
     expect(users.map((u) => u.role)).toEqual(["ADMIN", "WAREHOUSE_MANAGER", "PROCUREMENT_OFFICER", "VIEWER"]);
     expect(await bcrypt.compare(passwords().DEMO_ADMIN_PASSWORD, users[0].passwordHash)).toBe(true);
@@ -27,7 +29,7 @@ describe("ensureDemoUsers", () => {
     delete env[name];
 
     await expect(ensureDemoUsers(env)).rejects.toThrow(name);
-    expect(await prisma.user.count()).toBe(0);
+    expect(await prisma.user.count({ where: demoWhere })).toBe(0);
   });
 
   it("refuses passwords shorter than 12 characters and never echoes a password", async () => {
@@ -42,7 +44,7 @@ describe("ensureDemoUsers", () => {
     await ensureDemoUsers(passwords("b"));
 
     const admin = await prisma.user.findUnique({ where: { email: "admin@demo.synthetic" } });
-    expect(await prisma.user.count()).toBe(4);
+    expect(await prisma.user.count({ where: demoWhere })).toBe(4);
     expect(await bcrypt.compare(passwords("a").DEMO_ADMIN_PASSWORD, admin.passwordHash)).toBe(true);
 
     await ensureDemoUsers(passwords("b"), { resetPasswords: true });

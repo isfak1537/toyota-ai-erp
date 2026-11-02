@@ -1,11 +1,11 @@
-const request = require("supertest");
 
 const app = require("../../src/app");
+const { authed } = require("../helpers/http");
 const { prisma, resetDatabase, disconnect } = require("../helpers/db");
 const f = require("../helpers/factories");
 const { reconcile, ledgerFor } = require("../helpers/ledger");
 
-const api = () => request(app);
+const api = () => authed(app);
 
 beforeEach(resetDatabase);
 afterAll(disconnect);

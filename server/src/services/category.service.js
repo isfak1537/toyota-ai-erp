@@ -1,3 +1,4 @@
+const { NotFoundError } = require("../errors/app-error");
 const categoryRepository = require("../repositories/category.repository");
 
 const createCategory = async (data) => {
@@ -12,9 +13,7 @@ const getCategoryById = async (id) => {
   const category = await categoryRepository.getCategoryById(id);
 
   if (!category) {
-    const error = new Error("Category not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Category not found");
   }
 
   return category;

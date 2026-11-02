@@ -30,4 +30,13 @@ const requireRole =
     next();
   };
 
-module.exports = { authenticate, requireRole };
+// Reads (GET, HEAD, OPTIONS) are open to every authenticated role; anything else
+// needs one of `roles`. Fails closed: a write route added later is protected too.
+const requireRoleForWrites = (...roles) => {
+  const guard = requireRole(...roles);
+
+  return (req, res, next) =>
+    ["GET", "HEAD", "OPTIONS"].includes(req.method) ? next() : guard(req, res, next);
+};
+
+module.exports = { authenticate, requireRole, requireRoleForWrites };

@@ -1,11 +1,11 @@
-const request = require("supertest");
 const { Prisma } = require("@prisma/client");
 
 const app = require("../../src/app");
+const { authed } = require("../helpers/http");
 const { prisma, resetDatabase, disconnect } = require("../helpers/db");
 const f = require("../helpers/factories");
 
-const api = () => request(app);
+const api = () => authed(app);
 const dec = (value) => new Prisma.Decimal(value);
 
 beforeEach(resetDatabase);

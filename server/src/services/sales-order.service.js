@@ -1,3 +1,4 @@
+const { ConflictError, NotFoundError, ValidationError } = require("../errors/app-error");
 const prisma = require("../config/prisma");
 
 const salesOrderRepository = require("../repositories/sales-order.repository");
@@ -10,7 +11,7 @@ function toId(value, fieldName = "id") {
   const id = Number(value);
 
   if (!Number.isInteger(id) || id <= 0) {
-    throw new Error(`${fieldName} must be a positive integer`);
+    throw new ValidationError(`${fieldName} must be a positive integer`);
   }
 
   return id;
@@ -36,11 +37,11 @@ async function createSalesOrder(input) {
   });
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new NotFoundError("Customer not found");
   }
 
   if (!customer.isActive) {
-    throw new Error("Customer is inactive");
+    throw new ConflictError("Customer is inactive");
   }
 
   const productIds = data.items.map(
@@ -50,7 +51,7 @@ async function createSalesOrder(input) {
   const uniqueProductIds = new Set(productIds);
 
   if (uniqueProductIds.size !== productIds.length) {
-    throw new Error(
+    throw new ValidationError(
       "Duplicate product is not allowed in the same sales order"
     );
   }
@@ -64,14 +65,14 @@ async function createSalesOrder(input) {
   });
 
   if (products.length !== productIds.length) {
-    throw new Error(
+    throw new NotFoundError(
       "One or more products were not found"
     );
   }
 
   for (const product of products) {
     if (!product.isActive) {
-      throw new Error(
+      throw new ConflictError(
         `Product ${product.sku} is inactive`
       );
     }
@@ -152,7 +153,7 @@ async function getAllSalesOrders(query = {}) {
   ];
 
   if (status && !validStatuses.includes(status)) {
-    throw new Error("Invalid sales order status");
+    throw new ValidationError("Invalid sales order status");
   }
 
   return salesOrderRepository.findAllSalesOrders({
@@ -171,7 +172,7 @@ async function getSalesOrderById(id) {
     );
 
   if (!salesOrder) {
-    throw new Error("Sales order not found");
+    throw new NotFoundError("Sales order not found");
   }
 
   return salesOrder;
@@ -186,11 +187,11 @@ async function confirmSalesOrder(id) {
     );
 
   if (!salesOrder) {
-    throw new Error("Sales order not found");
+    throw new NotFoundError("Sales order not found");
   }
 
   if (salesOrder.status !== "DRAFT") {
-    throw new Error(
+    throw new ConflictError(
       `Only DRAFT sales orders can be confirmed. Current status: ${salesOrder.status}`
     );
   }
@@ -202,11 +203,11 @@ async function confirmSalesOrder(id) {
   });
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new NotFoundError("Customer not found");
   }
 
   if (!customer.isActive) {
-    throw new Error("Customer is inactive");
+    throw new ConflictError("Customer is inactive");
   }
 
   return salesOrderRepository.updateSalesOrder(
@@ -226,14 +227,14 @@ async function cancelSalesOrder(id) {
     );
 
   if (!salesOrder) {
-    throw new Error("Sales order not found");
+    throw new NotFoundError("Sales order not found");
   }
 
   if (
     salesOrder.status !== "DRAFT" &&
     salesOrder.status !== "CONFIRMED"
   ) {
-    throw new Error(
+    throw new ConflictError(
       `Sales order cannot be cancelled from status ${salesOrder.status}`
     );
   }

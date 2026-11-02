@@ -15,6 +15,8 @@ const stockTransferRoutes = require("./routes/stock-transfer.routes");
 const procurementRoutes = require("./routes/procurement.routes");
 const salesOrderRoutes = require("./routes/sales-order.routes");
 const authRoutes = require("./routes/auth.routes");
+const { authenticate, requireRoleForWrites } = require("./middlewares/auth.middleware");
+const roles = require("./middlewares/roles");
 
 const app = express();
 
@@ -26,17 +28,22 @@ app.use(
 
 app.use(express.json());
 app.use("/api/v1/auth", authRoutes);
-app.use("/api/v1/sales-orders", salesOrderRoutes);
-app.use("/api/v1/companies", companyRoutes);
-app.use("/api/v1/factories", factoryRoutes);
-app.use("/api/v1/warehouses", warehouseRoutes);
-app.use("/api/v1/products", productRoutes);
-app.use("/api/v1/suppliers", supplierRoutes);
-app.use("/api/v1/supplier-products", supplierProductRoutes);
-app.use("/api/v1/inventory", inventoryRoutes);
-app.use("/api/v1/stock-transfers", stockTransferRoutes);
-app.use("/api/v1/procurement", procurementRoutes);
-app.use("/api/v1/customers", customerRoutes);
+// Every business route needs a valid login (401); writes need a role from the matrix (403).
+const protect = (path, router, allowed) =>
+  app.use(path, authenticate, ...(allowed ? [requireRoleForWrites(...allowed)] : []), router);
+
+protect("/api/v1/sales-orders", salesOrderRoutes, roles.MASTER_DATA);
+protect("/api/v1/companies", companyRoutes, roles.MASTER_DATA);
+protect("/api/v1/factories", factoryRoutes, roles.MASTER_DATA);
+protect("/api/v1/warehouses", warehouseRoutes, roles.MASTER_DATA);
+protect("/api/v1/products", productRoutes, roles.MASTER_DATA);
+protect("/api/v1/suppliers", supplierRoutes, roles.PROCUREMENT);
+protect("/api/v1/supplier-products", supplierProductRoutes, roles.PROCUREMENT);
+protect("/api/v1/inventory", inventoryRoutes, roles.STOCK);
+protect("/api/v1/stock-transfers", stockTransferRoutes, roles.STOCK);
+protect("/api/v1/customers", customerRoutes, roles.MASTER_DATA);
+// procurement sets its own roles per route (requisitions, purchase orders, goods receipts, invoices)
+protect("/api/v1/procurement", procurementRoutes);
 
 app.use((req, res, next) => {
   next(new NotFoundError("Route not found"));

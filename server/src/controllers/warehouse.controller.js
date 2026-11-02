@@ -1,79 +1,59 @@
 const warehouseService = require("../services/warehouse.service");
 
-const createWarehouse = async (req, res, next) => {
-  try {
-    const warehouse = await warehouseService.createWarehouse(req.body);
+const createWarehouse = async (req, res) => {
+  const warehouse = await warehouseService.createWarehouse(req.body);
 
-    res.status(201).json({
-      success: true,
-      message: "Warehouse created successfully",
-      data: warehouse,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(201).json({
+    success: true,
+    message: "Warehouse created successfully",
+    data: warehouse,
+  });
 };
 
-const getAllWarehouses = async (req, res, next) => {
-  try {
-    const warehouses = await warehouseService.getAllWarehouses();
+const getAllWarehouses = async (req, res) => {
+  const warehouses = await warehouseService.getAllWarehouses();
 
-    res.json({
-      success: true,
-      data: warehouses,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    success: true,
+    data: warehouses,
+  });
 };
 
-const getWarehouseById = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
+const getWarehouseById = async (req, res) => {
+  const id = Number(req.params.id);
 
-    const warehouse = await warehouseService.getWarehouseById(id);
+  const warehouse = await warehouseService.getWarehouseById(id);
 
-    res.json({
-      success: true,
-      data: warehouse,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    success: true,
+    data: warehouse,
+  });
 };
 
-const updateWarehouse = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
+const updateWarehouse = async (req, res) => {
+  const id = Number(req.params.id);
 
-    const warehouse = await warehouseService.updateWarehouse(
-      id,
-      req.body
-    );
+  const warehouse = await warehouseService.updateWarehouse(
+    id,
+    req.body
+  );
 
-    res.json({
-      success: true,
-      message: "Warehouse updated successfully",
-      data: warehouse,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    success: true,
+    message: "Warehouse updated successfully",
+    data: warehouse,
+  });
 };
 
-const deleteWarehouse = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
+const deleteWarehouse = async (req, res) => {
+  const id = Number(req.params.id);
 
-    await warehouseService.deactivateWarehouse(id);
+  await warehouseService.deactivateWarehouse(id);
 
-    res.json({
-      success: true,
-      message: "Warehouse deactivated successfully",
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    success: true,
+    message: "Warehouse deactivated successfully",
+  });
 };
 
 module.exports = {
