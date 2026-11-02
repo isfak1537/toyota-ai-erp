@@ -161,12 +161,33 @@ const updateInventory = async (id, data) => {
   });
 };
 
-const deleteInventory = async (id) => {
-  return prisma.inventory.delete({
-    where: { id },
-  });
-};
 
+// Stock leaves the system only through ledgered operations, so a record that
+// still holds on-hand or reserved stock cannot be deleted. One conditional
+// delete keeps this safe against a concurrent receipt or reservation.
+const deleteInventory = async (id) => {
+  const removed = await prisma.inventory.deleteMany({
+    where: {
+      id,
+      quantity: 0,
+      reservedQuantity: 0,
+    },
+  });
+
+  if (removed.count === 0) {
+    const existing = await prisma.inventory.findUnique({ where: { id } });
+
+    if (!existing) {
+      throw new NotFoundError("Inventory record not found");
+    }
+
+    throw new ConflictError(
+      "Cannot delete an inventory record that still holds stock. Issue or adjust the stock to zero first."
+    );
+  }
+
+  return { id };
+};
 
 const receiveStock = async ({
   productId,

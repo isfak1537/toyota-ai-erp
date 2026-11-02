@@ -168,7 +168,7 @@ describe("error middleware mapping", () => {
 
     const composite = await request(app).get("/dup/Inventory_productId_warehouseId_key");
     expect(composite.status).toBe(409);
-    expect(composite.body.message).toBe("A record with the same unique value already exists");
+    expect(composite.body.message).toBe("Inventory record already exists for this product and warehouse");
   });
 
   it("maps PrismaClientValidationError to 400 without echoing Prisma internals", async () => {
@@ -248,6 +248,24 @@ describe("error middleware mapping", () => {
     const res = await request(app).get("/raw");
 
     expect(res.status).toBe(500);
+  });
+
+  it("maps Prisma P2034 (deadlock / write conflict) to a retryable 409", async () => {
+    const app = buildApp((a) => {
+      a.post("/conflict", async () => {
+        throw Object.assign(new Error("Transaction failed due to a write conflict or a deadlock"), {
+          code: "P2034",
+        });
+      });
+    });
+
+    const res = await request(app).post("/conflict");
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({
+      success: false,
+      message: "The request conflicted with a concurrent update. Please retry.",
+    });
   });
 
   it("maps Prisma P2025 to 404", async () => {

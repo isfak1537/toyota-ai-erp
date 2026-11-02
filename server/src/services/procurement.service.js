@@ -1,6 +1,7 @@
 const crypto = require("crypto");
 const prisma = require("../config/prisma");
 const inventoryService = require("./inventory.service");
+const { parseId } = require("../utils/ids");
 const {
   calculateTotals,
   invoiceStatusFor,
@@ -17,15 +18,8 @@ const makeNumber = (prefix) => {
   return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 };
 
-const toId = (value, fieldName) => {
-  const id = Number(value);
-
-  if (!Number.isInteger(id) || id <= 0) {
-    throw new ValidationError(`${fieldName} must be a valid positive integer`);
-  }
-
-  return id;
-};
+const toId = (value, fieldName) =>
+  parseId(value, `${fieldName} must be a valid positive integer`);
 
 const toPositiveInteger = (value, fieldName) => {
   const number = Number(value);
@@ -176,32 +170,42 @@ const getRequisitions = async ({ skip = 0, take = 20 } = {}) => {
   return { items, total };
 };
 
+
 const submitRequisition = async (id) => {
   const requisitionId = toId(id, "requisitionId");
 
-  const requisition =
-    await prisma.purchaseRequisition.findUnique({
-      where: {
-        id: requisitionId,
-      },
-    });
-
-  if (!requisition) {
-    throw new NotFoundError("Purchase requisition not found");
-  }
-
-  if (requisition.status !== "DRAFT") {
-    throw new ConflictError(
-      "Only DRAFT requisitions can be submitted"
-    );
-  }
-
-  return prisma.purchaseRequisition.update({
+  // One conditional update: of any number of concurrent calls exactly one
+  // moves the status, the rest get a 409 (state conflict).
+  const claimed = await prisma.purchaseRequisition.updateMany({
     where: {
       id: requisitionId,
+      status: "DRAFT",
     },
     data: {
       status: "SUBMITTED",
+    },
+  });
+
+  if (claimed.count === 0) {
+    const existing = await prisma.purchaseRequisition.findUnique({
+      where: {
+        id: requisitionId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Purchase requisition not found");
+    }
+
+    throw new ConflictError("Only DRAFT requisitions can be submitted");
+  }
+
+  return prisma.purchaseRequisition.findUnique({
+    where: {
+      id: requisitionId,
     },
     include: {
       supplier: true,
@@ -214,32 +218,42 @@ const submitRequisition = async (id) => {
   });
 };
 
+
 const approveRequisition = async (id) => {
   const requisitionId = toId(id, "requisitionId");
 
-  const requisition =
-    await prisma.purchaseRequisition.findUnique({
-      where: {
-        id: requisitionId,
-      },
-    });
-
-  if (!requisition) {
-    throw new NotFoundError("Purchase requisition not found");
-  }
-
-  if (requisition.status !== "SUBMITTED") {
-    throw new ConflictError(
-      "Only SUBMITTED requisitions can be approved"
-    );
-  }
-
-  return prisma.purchaseRequisition.update({
+  // One conditional update: of any number of concurrent calls exactly one
+  // moves the status, the rest get a 409 (state conflict).
+  const claimed = await prisma.purchaseRequisition.updateMany({
     where: {
       id: requisitionId,
+      status: "SUBMITTED",
     },
     data: {
       status: "APPROVED",
+    },
+  });
+
+  if (claimed.count === 0) {
+    const existing = await prisma.purchaseRequisition.findUnique({
+      where: {
+        id: requisitionId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Purchase requisition not found");
+    }
+
+    throw new ConflictError("Only SUBMITTED requisitions can be approved");
+  }
+
+  return prisma.purchaseRequisition.findUnique({
+    where: {
+      id: requisitionId,
     },
     include: {
       supplier: true,
@@ -455,35 +469,42 @@ const getPurchaseOrders = async ({ skip = 0, take = 20 } = {}) => {
   return { items, total };
 };
 
+
 const approvePurchaseOrder = async (id) => {
-  const purchaseOrderId = toId(
-    id,
-    "purchaseOrderId"
-  );
+  const purchaseOrderId = toId(id, "purchaseOrderId");
 
-  const purchaseOrder =
-    await prisma.purchaseOrder.findUnique({
-      where: {
-        id: purchaseOrderId,
-      },
-    });
-
-  if (!purchaseOrder) {
-    throw new NotFoundError("Purchase order not found");
-  }
-
-  if (purchaseOrder.status !== "PENDING_APPROVAL") {
-    throw new ConflictError(
-      "Only PENDING_APPROVAL purchase orders can be approved"
-    );
-  }
-
-  return prisma.purchaseOrder.update({
+  // One conditional update: of any number of concurrent calls exactly one
+  // moves the status, the rest get a 409 (state conflict).
+  const claimed = await prisma.purchaseOrder.updateMany({
     where: {
       id: purchaseOrderId,
+      status: "PENDING_APPROVAL",
     },
     data: {
       status: "APPROVED",
+    },
+  });
+
+  if (claimed.count === 0) {
+    const existing = await prisma.purchaseOrder.findUnique({
+      where: {
+        id: purchaseOrderId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundError("Purchase order not found");
+    }
+
+    throw new ConflictError("Only PENDING_APPROVAL purchase orders can be approved");
+  }
+
+  return prisma.purchaseOrder.findUnique({
+    where: {
+      id: purchaseOrderId,
     },
     include: {
       supplier: true,

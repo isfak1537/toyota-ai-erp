@@ -1,17 +1,6 @@
 const inventoryService = require("../services/inventory.service");
 const { parsePagination, toPagination } = require("../utils/pagination");
-const { ValidationError } = require("../errors/app-error");
-
-const parseId = (value) => {
-  const id = Number(value);
-
-  if (!Number.isInteger(id) || id <= 0) {
-    throw new ValidationError("Invalid ID");
-  }
-
-  return id;
-};
-
+const { parseId } = require("../utils/ids");
 const createInventory = async (req, res) => {
   const data = await inventoryService.createInventory(req.body);
 

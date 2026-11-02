@@ -32,6 +32,9 @@ const uniqueViolationFields = (meta) => {
 
 const uniqueViolationMessage = (fields) => {
 
+  if (fields.includes("productId") && fields.includes("warehouseId")) {
+    return "Inventory record already exists for this product and warehouse";
+  }
   if (fields.includes("sku")) return "Product SKU already exists";
   if (fields.includes("name")) return "Category name already exists";
   if (fields.includes("code")) return "A record with this code already exists";
@@ -86,6 +89,11 @@ const errorMiddleware = (err, req, res, next) => {
 
   if (isValueOutOfRange(err)) {
     return respond(400, "A numeric value is outside the allowed range");
+  }
+
+  // Deadlock or write conflict reported by the database; the client can retry.
+  if (err?.code === "P2034") {
+    return respond(409, "The request conflicted with a concurrent update. Please retry.");
   }
 
   if (err?.code === "P2025") {
