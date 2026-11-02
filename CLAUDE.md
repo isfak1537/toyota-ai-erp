@@ -104,3 +104,6 @@ Keep `npm test` passing.
 
 - P2003 (foreign key) -> 409 is verified only with a synthetic error. Add a real FK-violation
   integration test once the test database exists (D-02 task).
+- Stock-changing write paths (receive, issue, adjust, reserve, release, transfer, goods receipt)
+  and their 409 mappings are verified only by code swap, not by real writes. Add real write tests
+  once the test database exists (task 1.3).
