@@ -1,41 +1,26 @@
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter } from 'react-router'
+import { AuthProvider } from './auth/AuthProvider'
 
-interface Dashboard {
-  company: string;
-  inventory: number;
-  employees: number;
-  machinesRunning: number;
-  ordersToday: number;
-}
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      // a 4xx will not get better by asking again; only network trouble and server errors are retried
+      retry: (count, error) => ((error as { status?: number }).status ?? 0) >= 500 || (error as { status?: number }).status === 0 ? count < 1 : false,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
-function App() {
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-
-  useEffect(() => {
-    axios
-      .get("http://localhost:5001/api/dashboard")
-      .then((response) => {
-        setDashboard(response.data);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-  }, []);
-
-  if (!dashboard) {
-    return <h1>Loading...</h1>;
-  }
-
+export default function App() {
   return (
-    <div>
-      <h1>{dashboard.company}</h1>
-      <h2>Inventory: {dashboard.inventory}</h2>
-      <h2>Employees: {dashboard.employees}</h2>
-      <h2>Machines Running: {dashboard.machinesRunning}</h2>
-      <h2>Today's Orders: {dashboard.ordersToday}</h2>
-    </div>
-  );
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <main className="main__inner">Toyota AI ERP</main>
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
+  )
 }
-
-export default App;
