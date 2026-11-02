@@ -153,21 +153,27 @@ const createRequisition = async (data) => {
   });
 };
 
-const getRequisitions = async () => {
-  return prisma.purchaseRequisition.findMany({
-    orderBy: {
-      createdAt: "desc",
-    },
-    include: {
-      supplier: true,
-      items: {
-        include: {
-          product: true,
+
+const getRequisitions = async ({ skip = 0, take = 20 } = {}) => {
+  const [items, total] = await prisma.$transaction([
+    prisma.purchaseRequisition.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      include: {
+        supplier: true,
+        items: {
+          include: {
+            product: true,
+          },
         },
+        purchaseOrders: true,
       },
-      purchaseOrders: true,
-    },
-  });
+      skip,
+      take,
+    }),
+    prisma.purchaseRequisition.count(),
+  ]);
+
+  return { items, total };
 };
 
 const submitRequisition = async (id) => {
@@ -424,23 +430,29 @@ const createPurchaseOrder = async (data) => {
   });
 };
 
-const getPurchaseOrders = async () => {
-  return prisma.purchaseOrder.findMany({
-    orderBy: {
-      createdAt: "desc",
-    },
-    include: {
-      supplier: true,
-      requisition: true,
-      items: {
-        include: {
-          product: true,
+
+const getPurchaseOrders = async ({ skip = 0, take = 20 } = {}) => {
+  const [items, total] = await prisma.$transaction([
+    prisma.purchaseOrder.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      include: {
+        supplier: true,
+        requisition: true,
+        items: {
+          include: {
+            product: true,
+          },
         },
+        goodsReceipts: true,
+        invoices: true,
       },
-      goodsReceipts: true,
-      invoices: true,
-    },
-  });
+      skip,
+      take,
+    }),
+    prisma.purchaseOrder.count(),
+  ]);
+
+  return { items, total };
 };
 
 const approvePurchaseOrder = async (id) => {
@@ -713,26 +725,32 @@ const createGoodsReceipt = async (data) => {
   });
 };
 
-const getGoodsReceipts = async () => {
-  return prisma.goodsReceipt.findMany({
-    orderBy: {
-      createdAt: "desc",
-    },
-    include: {
-      purchaseOrder: {
-        include: {
-          supplier: true,
+
+const getGoodsReceipts = async ({ skip = 0, take = 20 } = {}) => {
+  const [items, total] = await prisma.$transaction([
+    prisma.goodsReceipt.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      include: {
+        purchaseOrder: {
+          include: {
+            supplier: true,
+          },
+        },
+        warehouse: true,
+        items: {
+          include: {
+            product: true,
+            purchaseOrderItem: true,
+          },
         },
       },
-      warehouse: true,
-      items: {
-        include: {
-          product: true,
-          purchaseOrderItem: true,
-        },
-      },
-    },
-  });
+      skip,
+      take,
+    }),
+    prisma.goodsReceipt.count(),
+  ]);
+
+  return { items, total };
 };
 
 const createPurchaseInvoice = async (data) => {
@@ -937,21 +955,27 @@ const createPurchaseInvoice = async (data) => {
   });
 };
 
-const getPurchaseInvoices = async () => {
-  return prisma.purchaseInvoice.findMany({
-    orderBy: {
-      createdAt: "desc",
-    },
-    include: {
-      supplier: true,
-      purchaseOrder: true,
-      items: {
-        include: {
-          product: true,
+
+const getPurchaseInvoices = async ({ skip = 0, take = 20 } = {}) => {
+  const [items, total] = await prisma.$transaction([
+    prisma.purchaseInvoice.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      include: {
+        supplier: true,
+        purchaseOrder: true,
+        items: {
+          include: {
+            product: true,
+          },
         },
       },
-    },
-  });
+      skip,
+      take,
+    }),
+    prisma.purchaseInvoice.count(),
+  ]);
+
+  return { items, total };
 };
 
 module.exports = {

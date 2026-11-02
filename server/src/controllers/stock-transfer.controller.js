@@ -1,4 +1,5 @@
 const stockTransferService = require("../services/stock-transfer.service");
+const { parsePagination, toPagination } = require("../utils/pagination");
 const { ValidationError } = require("../errors/app-error");
 
 const parseId = (value) => {
@@ -22,11 +23,13 @@ const completeTransfer = async (req, res) => {
 };
 
 const getAllTransfers = async (req, res) => {
-  const data = await stockTransferService.getAllTransfers();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await stockTransferService.getAllTransfers(pagination);
 
   res.json({
     success: true,
-    data,
+    data: items,
+    pagination: toPagination(pagination, total),
   });
 };
 

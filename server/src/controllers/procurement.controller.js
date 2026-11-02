@@ -1,4 +1,5 @@
 const procurementService = require("../services/procurement.service");
+const { parsePagination, toPagination } = require("../utils/pagination");
 
 const createRequisition = async (req, res) => {
   const data = await procurementService.createRequisition(req.body);
@@ -11,11 +12,13 @@ const createRequisition = async (req, res) => {
 };
 
 const getRequisitions = async (req, res) => {
-  const data = await procurementService.getRequisitions();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await procurementService.getRequisitions(pagination);
 
-  return res.json({
+  res.json({
     success: true,
-    data,
+    data: items,
+    pagination: toPagination(pagination, total),
   });
 };
 
@@ -50,11 +53,13 @@ const createPurchaseOrder = async (req, res) => {
 };
 
 const getPurchaseOrders = async (req, res) => {
-  const data = await procurementService.getPurchaseOrders();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await procurementService.getPurchaseOrders(pagination);
 
-  return res.json({
+  res.json({
     success: true,
-    data,
+    data: items,
+    pagination: toPagination(pagination, total),
   });
 };
 
@@ -79,11 +84,13 @@ const createGoodsReceipt = async (req, res) => {
 };
 
 const getGoodsReceipts = async (req, res) => {
-  const data = await procurementService.getGoodsReceipts();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await procurementService.getGoodsReceipts(pagination);
 
-  return res.json({
+  res.json({
     success: true,
-    data,
+    data: items,
+    pagination: toPagination(pagination, total),
   });
 };
 
@@ -98,11 +105,13 @@ const createPurchaseInvoice = async (req, res) => {
 };
 
 const getPurchaseInvoices = async (req, res) => {
-  const data = await procurementService.getPurchaseInvoices();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await procurementService.getPurchaseInvoices(pagination);
 
-  return res.json({
+  res.json({
     success: true,
-    data,
+    data: items,
+    pagination: toPagination(pagination, total),
   });
 };
 

@@ -118,18 +118,19 @@ const createInventory = async (data) => {
   });
 };
 
-const getAllInventory = async () => {
-  return prisma.inventory.findMany({
-    include: {
-      product: true,
-      warehouse: {
-        include: {
-          factory: true,
-        },
-      },
-    },
-    orderBy: { id: "asc" },
-  });
+
+const getAllInventory = async ({ skip = 0, take = 20 } = {}) => {
+  const [items, total] = await prisma.$transaction([
+    prisma.inventory.findMany({
+      include: inventoryInclude,
+      orderBy: { id: "asc" },
+      skip,
+      take,
+    }),
+    prisma.inventory.count(),
+  ]);
+
+  return { items, total };
 };
 
 const getInventoryById = async (id) => {
@@ -483,7 +484,8 @@ const getTransactions = async ({
   productId,
   warehouseId,
   type,
-  limit = 100,
+  skip = 0,
+  take = 20,
 }) => {
   const where = {};
 
@@ -513,31 +515,36 @@ const getTransactions = async ({
     where.type = type;
   }
 
-  return prisma.inventoryTransaction.findMany({
-    where,
-    include: {
-      product: true,
-      warehouse: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: Math.min(Number(limit) || 100, 500),
-  });
+  const [items, total] = await prisma.$transaction([
+    prisma.inventoryTransaction.findMany({
+      where,
+      include: {
+        product: true,
+        warehouse: true,
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.inventoryTransaction.count({ where }),
+  ]);
+
+  return { items, total };
 };
 
-const getLowStock = async () => {
+
+const getLowStock = async ({ skip = 0, take = 20 } = {}) => {
   const inventory = await prisma.inventory.findMany({
     include: {
       product: true,
       warehouse: true,
     },
-    orderBy: {
-      quantity: "asc",
-    },
+    orderBy: [{ quantity: "asc" }, { id: "asc" }],
   });
 
-  return inventory
+  // The condition compares two columns across tables, which Prisma cannot
+  // filter on, so it is applied here and the page is cut afterwards.
+  const lowStock = inventory
     .map((item) => ({
       ...item,
       availableQuantity:
@@ -547,6 +554,11 @@ const getLowStock = async () => {
       (item) =>
         item.availableQuantity <= item.product.reorderLevel
     );
+
+  return {
+    items: lowStock.slice(skip, skip + take),
+    total: lowStock.length,
+  };
 };
 
 module.exports = {

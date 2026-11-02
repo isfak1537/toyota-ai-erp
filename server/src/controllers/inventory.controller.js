@@ -1,4 +1,5 @@
 const inventoryService = require("../services/inventory.service");
+const { parsePagination, toPagination } = require("../utils/pagination");
 const { ValidationError } = require("../errors/app-error");
 
 const parseId = (value) => {
@@ -22,11 +23,13 @@ const createInventory = async (req, res) => {
 };
 
 const getAllInventory = async (req, res) => {
-  const data = await inventoryService.getAllInventory();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await inventoryService.getAllInventory(pagination);
 
   res.json({
     success: true,
-    data,
+    data: items,
+    pagination: toPagination(pagination, total),
   });
 };
 
@@ -116,26 +119,30 @@ const releaseStock = async (req, res) => {
 };
 
 const getTransactions = async (req, res) => {
-  const data = await inventoryService.getTransactions({
+  const pagination = parsePagination(req.query);
+  const { items, total } = await inventoryService.getTransactions({
     productId: req.query.productId,
     warehouseId: req.query.warehouseId,
     type: req.query.type,
-    limit: req.query.limit,
+    ...pagination,
   });
 
   res.json({
     success: true,
-    data,
+    data: items,
+    pagination: toPagination(pagination, total),
   });
 };
 
 const getLowStock = async (req, res) => {
-  const data = await inventoryService.getLowStock();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await inventoryService.getLowStock(pagination);
 
   res.json({
     success: true,
-    count: data.length,
-    data,
+    count: total,
+    data: items,
+    pagination: toPagination(pagination, total),
   });
 };
 

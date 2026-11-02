@@ -214,21 +214,27 @@ const completeTransfer = async ({
   });
 };
 
-const getAllTransfers = async () => {
-  return prisma.stockTransfer.findMany({
-    include: {
-      items: {
-        include: {
-          product: true,
+
+const getAllTransfers = async ({ skip = 0, take = 20 } = {}) => {
+  const [items, total] = await prisma.$transaction([
+    prisma.stockTransfer.findMany({
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
         },
+        fromWarehouse: true,
+        toWarehouse: true,
       },
-      fromWarehouse: true,
-      toWarehouse: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip,
+      take,
+    }),
+    prisma.stockTransfer.count(),
+  ]);
+
+  return { items, total };
 };
 
 const getTransferById = async (id) => {
