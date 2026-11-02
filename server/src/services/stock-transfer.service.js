@@ -1,4 +1,9 @@
 const prisma = require("../config/prisma");
+const {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} = require("../errors/app-error");
 
 const generateTransferNumber = () => {
   return `TRF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -11,11 +16,11 @@ const completeTransfer = async ({
   notes,
 }) => {
   if (fromWarehouseId === toWarehouseId) {
-    throw new Error("Source and destination warehouses must be different");
+    throw new ValidationError("Source and destination warehouses must be different");
   }
 
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error("At least one transfer item is required");
+    throw new ValidationError("At least one transfer item is required");
   }
 
   for (const item of items) {
@@ -24,9 +29,18 @@ const completeTransfer = async ({
       !Number.isInteger(Number(item.quantity)) ||
       Number(item.quantity) <= 0
     ) {
-      throw new Error(
+      throw new ValidationError(
         "Each transfer item must have a valid productId and positive quantity"
       );
+    }
+  }
+
+  for (const [field, value] of [
+    ["fromWarehouseId", fromWarehouseId],
+    ["toWarehouseId", toWarehouseId],
+  ]) {
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new ValidationError(`${field} must be a positive integer`);
     }
   }
 
@@ -41,15 +55,15 @@ const completeTransfer = async ({
     ]);
 
     if (!fromWarehouse) {
-      throw new Error("Source warehouse not found");
+      throw new NotFoundError("Source warehouse not found");
     }
 
     if (!toWarehouse) {
-      throw new Error("Destination warehouse not found");
+      throw new NotFoundError("Destination warehouse not found");
     }
 
     if (!fromWarehouse.isActive || !toWarehouse.isActive) {
-      throw new Error("Both warehouses must be active");
+      throw new ConflictError("Both warehouses must be active");
     }
 
     const transferItems = [];
@@ -63,11 +77,11 @@ const completeTransfer = async ({
       });
 
       if (!product) {
-        throw new Error(`Product ${productId} not found`);
+        throw new NotFoundError(`Product ${productId} not found`);
       }
 
       if (!product.isActive || !product.isStockTracked) {
-        throw new Error(
+        throw new ConflictError(
           `Product ${productId} is inactive or stock tracking is disabled`
         );
       }
@@ -82,7 +96,7 @@ const completeTransfer = async ({
       });
 
       if (!sourceInventory) {
-        throw new Error(
+        throw new NotFoundError(
           `No inventory found for product ${productId} in source warehouse`
         );
       }
@@ -92,7 +106,7 @@ const completeTransfer = async ({
         sourceInventory.reservedQuantity;
 
       if (quantity > available) {
-        throw new Error(
+        throw new ConflictError(
           `Insufficient stock for product ${productId}. Available: ${available}, requested: ${quantity}`
         );
       }
@@ -233,7 +247,7 @@ const getTransferById = async (id) => {
   });
 
   if (!transfer) {
-    throw new Error("Stock transfer not found");
+    throw new NotFoundError("Stock transfer not found");
   }
 
   return transfer;
