@@ -141,7 +141,7 @@ const main = async (argv, deps = {}) => {
     log(`Synthetic data (seed ${seed}, history ends ${endDate}, ${DAYS} days)`);
     log(`Target database: ${name} on ${host ?? "an unknown host"}${isLocal ? "" : "  (NOT local)"}`);
     log(`Mode: ${options.apply ? (options.replace ? "APPLY with --replace" : "APPLY") : "DRY RUN, nothing is written"}\n`);
-    log("Would insert:");
+    log(options.apply ? "Inserting:" : "Would insert:");
     log(table(summarise(dataset)));
     log(`\nSeed-owned rows already in this database: ${existing.total}`);
 

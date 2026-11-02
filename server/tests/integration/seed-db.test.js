@@ -84,9 +84,12 @@ describe("dry run (default)", () => {
 describe("--apply writes the dataset", () => {
   it("creates every record of the in-memory dataset (SEED-001..003)", async () => {
     const dataset = buildDataset();
-    const { code } = await run(["--apply"]);
+    const { code, output } = await run(["--apply"]);
 
     expect(code).toBe(0);
+    expect(output).toMatch(/Inserting:/);
+    expect(output).not.toMatch(/Would insert/);
+    expect(output).toMatch(/Result: OK \(0 errors, 0 warnings\)/);
     expect(await counts()).toEqual({
       product: dataset.products.length,
       inventory: dataset.inventory.length,
