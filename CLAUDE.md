@@ -100,12 +100,13 @@ Keep `npm test` passing.
 - P0 in progress (branch `phase-0-fixes`). Done: repo hygiene, D-05 (typed errors, central error
   middleware, app/index split), test database harness (1.3), D-02 (atomic stock changes for
   receive, issue, adjust, reserve, release and transfer, with concurrency tests and CHECK
-  constraints). Open for the P0 gate: D-03, D-06, D-07. Known defects: see SRS section 13.
+  constraints), D-03 (goods receipt in one locked transaction), D-06 (Decimal procurement money),
+  D-07 (Zod writes and pagination) for the inventory, stock-transfer and procurement modules.
+  Open for the P0 gate: branch review. Known defects: see SRS section 13.
 - Update this section when a phase gate passes.
 
 ### Pending verification
 
-- Goods receipt still updates inventory with read-then-write (lost updates possible) until D-03.
 - The `Inventory` CHECK-constraint migration is applied to the test database by the harness but
   not yet to the dev database: run `npm exec prisma -- migrate deploy` in `server/`.
 - Prisma's query engine runs nested `include` queries concurrently on one transaction connection;
