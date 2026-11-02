@@ -199,6 +199,22 @@ describe("error middleware mapping", () => {
     expect(res.body.message).toBe("A record with the same unique value already exists");
   });
 
+  it("maps Prisma P2003 (foreign key) to 409 without echoing constraint details", async () => {
+    const app = buildApp((a) => {
+      a.delete("/fk", async () => {
+        throw Object.assign(
+          new Error('Foreign key constraint violated: "Inventory_productId_fkey"'),
+          { code: "P2003", meta: { field_name: "Inventory_productId_fkey (index)" } }
+        );
+      });
+    });
+
+    const res = await request(app).delete("/fk");
+
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ success: false, message: "Related record conflict" });
+  });
+
   it("maps Prisma P2025 to 404", async () => {
     const app = buildApp((a) => {
       a.get("/gone", async () => {

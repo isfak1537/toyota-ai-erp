@@ -77,6 +77,10 @@ const errorMiddleware = (err, req, res, next) => {
     return respond(409, uniqueViolationMessage(uniqueViolationFields(err.meta)));
   }
 
+  if (err?.code === "P2003") {
+    return respond(409, "Related record conflict");
+  }
+
   if (err?.code === "P2025") {
     return respond(404, "Record not found");
   }
