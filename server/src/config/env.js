@@ -21,6 +21,23 @@ const env = {
     return secret;
   },
 
+  // AI service (read lazily so the ERP starts and works without it)
+  get aiServiceUrl() {
+    return process.env.AI_SERVICE_URL || "http://localhost:8000";
+  },
+
+  get aiServiceSecret() {
+    return process.env.AI_SERVICE_SECRET || "";
+  },
+
+  get aiTimeoutMs() {
+    return Number(process.env.AI_TIMEOUT_MS) || 15000;
+  },
+
+  get aiTrainTimeoutMs() {
+    return Number(process.env.AI_TRAIN_TIMEOUT_MS) || 120000;
+  },
+
   get jwtExpiresIn() {
     return process.env.JWT_EXPIRES_IN || "8h";
   },
