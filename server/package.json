@@ -5,7 +5,33 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon src/index.js",
-    "db:seed": "node prisma/seed.js"
+    "db:seed": "node prisma/seed.js",
+    "test": "jest --runInBand",
+    "test:unit": "jest --selectProjects unit",
+    "test:integration": "jest --selectProjects integration --runInBand"
+  },
+  "jest": {
+    "projects": [
+      {
+        "displayName": "unit",
+        "testEnvironment": "node",
+        "testMatch": [
+          "<rootDir>/tests/unit/**/*.test.js"
+        ]
+      },
+      {
+        "displayName": "integration",
+        "testEnvironment": "node",
+        "testMatch": [
+          "<rootDir>/tests/integration/**/*.test.js"
+        ],
+        "globalSetup": "<rootDir>/tests/setup/global-setup.js",
+        "setupFiles": [
+          "<rootDir>/tests/setup/env.js"
+        ],
+        "testTimeout": 30000
+      }
+    ]
   },
   "keywords": [],
   "author": "",
@@ -22,6 +48,8 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "jest": "^30.5.2",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.1"
   }
 }

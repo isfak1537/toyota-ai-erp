@@ -217,6 +217,11 @@ HR, Accountant) remain as defined in v1.0 and are tagged Later.
 - Goods receipt validation of remaining PO quantity must happen inside
   the same transaction that updates received quantity.
 
+- Purchase orders created from a requisition: for each requisition item,
+  the quantities in non-cancelled purchase orders may not exceed the
+  requisition quantity. The check runs under a lock on the requisition so
+  concurrent orders cannot exceed it (FR-014).
+
 - A warehouse must be active and valid for stock operations.
 
 - Financial totals must use decimal types and decimal arithmetic;
@@ -258,9 +263,9 @@ SalesOrder(+Item). The Prisma schema remains the source of truth.
 - All write requests validated with Zod; validation errors return 400
   with field details.
 
-- Error classes map to status codes centrally (400 validation/business
-  rule, 401, 403, 404, 409 conflict/duplicate, 500); no status codes
-  derived from message text.
+- Error classes map to status codes centrally (400 malformed input or
+  static validation rule; 401; 403; 404; 409 duplicate or state
+  conflict; 500); no status codes derived from message text.
 
 - List endpoints support pagination (page, pageSize ≤ 100) and filters.
 
@@ -385,6 +390,9 @@ Build Plan.
 - Final role/permission matrix beyond the four MVP roles.
 
 - Tax, currency, rounding and invoice numbering rules (post-MVP).
+  Decision 2 Nov 2026: money inputs with more than two decimals are
+  rounded half-up for the MVP; the wider tax and rounding policy still
+  needs finance approval.
 
 - Concurrency isolation strategy for sales and payments (post-MVP).
 

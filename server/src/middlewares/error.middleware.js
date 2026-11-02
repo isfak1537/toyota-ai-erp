@@ -1,55 +1,124 @@
+const { ZodError } = require("zod");
+const { AppError } = require("../errors/app-error");
+const { fieldDetails } = require("../utils/zod-details");
+
+// Classic engine reports meta.target (array of fields). With @prisma/adapter-pg
+// meta.target is absent; the constraint name ("Product_sku_key") is under
+// meta.driverAdapterError.cause.constraint instead.
+const uniqueViolationFields = (meta) => {
+  if (Array.isArray(meta?.target)) {
+    return meta.target;
+  }
+
+  const cause = meta?.driverAdapterError?.cause;
+  const constraint = cause?.constraint;
+
+  if (Array.isArray(constraint?.fields)) {
+    return constraint.fields;
+  }
+
+  const index = constraint?.index;
+
+  if (typeof index === "string") {
+    const match = index.match(/^[^_]+_(.+)_key$/);
+
+    if (match) {
+      return match[1].split("_");
+    }
+  }
+
+  return [];
+};
+
+const uniqueViolationMessage = (fields) => {
+
+  if (fields.includes("productId") && fields.includes("warehouseId")) {
+    return "Inventory record already exists for this product and warehouse";
+  }
+  if (fields.includes("sku")) return "Product SKU already exists";
+  if (fields.includes("name")) return "Category name already exists";
+  if (fields.includes("code")) return "A record with this code already exists";
+  if (fields.includes("email")) return "A record with this email already exists";
+
+  return "A record with the same unique value already exists";
+};
+
+// A numeric value that fits the request bounds but not the column (integer
+// stock totals, Decimal(14,2) amounts). ORM writes raise P2020; raw SQL such as
+// applyDelta raises P2010; both carry the Postgres 22003 cause from the adapter.
+const isValueOutOfRange = (err) => {
+  const cause = err?.meta?.driverAdapterError?.cause;
+
+  return (
+    err?.code === "P2020" ||
+    cause?.kind === "ValueOutOfRange" ||
+    cause?.originalCode === "22003"
+  );
+};
+
 const errorMiddleware = (err, req, res, next) => {
-  console.error(err);
+  if (res.headersSent) {
+    return next(err);
+  }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Prisma Unique Constraint Error
-  |--------------------------------------------------------------------------
-  */
+  const respond = (statusCode, message, errors) => {
+    const body = { success: false, message };
 
-  if (err.code === "P2002") {
-    const target = err.meta?.target;
-
-    let message =
-      "A record with the same unique value already exists";
-
-    if (Array.isArray(target)) {
-      if (target.includes("sku")) {
-        message = "Product SKU already exists";
-      } else if (target.includes("name")) {
-        message = "Category name already exists";
-      } else if (target.includes("code")) {
-        message = "A record with this code already exists";
-      } else if (target.includes("email")) {
-        message = "A record with this email already exists";
-      }
+    if (errors && Object.keys(errors).length > 0) {
+      body.errors = errors;
     }
 
-    return res.status(409).json({
-      success: false,
-      message,
-    });
-  }
-
-  /*
-  |--------------------------------------------------------------------------
-  | General Application Errors
-  |--------------------------------------------------------------------------
-  */
-
-  const statusCode = err.statusCode || 500;
-
-  const response = {
-    success: false,
-    message:
-      err.message || "Internal server error",
+    return res.status(statusCode).json(body);
   };
 
-  if (err.details) {
-    response.errors = err.details;
+  if (err instanceof AppError) {
+    return respond(err.statusCode, err.message, err.details);
   }
 
-  res.status(statusCode).json(response);
+  if (err instanceof ZodError) {
+    return respond(400, "Validation failed", fieldDetails(err.issues));
+  }
+
+  if (err?.code === "P2002") {
+    return respond(409, uniqueViolationMessage(uniqueViolationFields(err.meta)));
+  }
+
+  if (err?.code === "P2003") {
+    return respond(409, "Related record conflict");
+  }
+
+  if (isValueOutOfRange(err)) {
+    return respond(400, "A numeric value is outside the allowed range");
+  }
+
+  // Deadlock or write conflict reported by the database; the client can retry.
+  if (err?.code === "P2034") {
+    return respond(409, "The request conflicted with a concurrent update. Please retry.");
+  }
+
+  if (err?.code === "P2025") {
+    return respond(404, "Record not found");
+  }
+
+  // Unknown or mistyped fields reaching Prisma. The raw message echoes the
+  // query and model internals, so it is never returned to the client.
+  if (err?.name === "PrismaClientValidationError") {
+    return respond(400, "Invalid request data");
+  }
+
+  if (err?.type === "entity.parse.failed") {
+    return respond(400, "Malformed JSON body");
+  }
+
+  // Legacy modules (product, category, ...) still set statusCode/details on a
+  // plain Error. Remove this branch once they throw AppError subclasses.
+  if (Number.isInteger(err?.statusCode) && err.statusCode >= 400 && err.statusCode < 500) {
+    return respond(err.statusCode, err.message, err.details);
+  }
+
+  console.error(err);
+
+  return respond(500, "Internal server error");
 };
 
 module.exports = errorMiddleware;

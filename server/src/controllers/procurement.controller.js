@@ -1,162 +1,118 @@
 const procurementService = require("../services/procurement.service");
+const { parsePagination, toPagination } = require("../utils/pagination");
 
-const handleError = (res, error) => {
-  console.error(error);
+const createRequisition = async (req, res) => {
+  const data = await procurementService.createRequisition(req.body);
 
-  return res.status(400).json({
-    success: false,
-    message: error.message || "Something went wrong",
+  return res.status(201).json({
+    success: true,
+    message: "Purchase requisition created successfully",
+    data,
   });
 };
 
-const createRequisition = async (req, res) => {
-  try {
-    const data = await procurementService.createRequisition(req.body);
-
-    return res.status(201).json({
-      success: true,
-      message: "Purchase requisition created successfully",
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
-};
-
 const getRequisitions = async (req, res) => {
-  try {
-    const data = await procurementService.getRequisitions();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await procurementService.getRequisitions(pagination);
 
-    return res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  res.json({
+    success: true,
+    data: items,
+    pagination: toPagination(pagination, total),
+  });
 };
 
 const submitRequisition = async (req, res) => {
-  try {
-    const data = await procurementService.submitRequisition(req.params.id);
+  const data = await procurementService.submitRequisition(req.params.id);
 
-    return res.json({
-      success: true,
-      message: "Purchase requisition submitted successfully",
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  return res.json({
+    success: true,
+    message: "Purchase requisition submitted successfully",
+    data,
+  });
 };
 
 const approveRequisition = async (req, res) => {
-  try {
-    const data = await procurementService.approveRequisition(req.params.id);
+  const data = await procurementService.approveRequisition(req.params.id);
 
-    return res.json({
-      success: true,
-      message: "Purchase requisition approved successfully",
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  return res.json({
+    success: true,
+    message: "Purchase requisition approved successfully",
+    data,
+  });
 };
 
 const createPurchaseOrder = async (req, res) => {
-  try {
-    const data = await procurementService.createPurchaseOrder(req.body);
+  const data = await procurementService.createPurchaseOrder(req.body);
 
-    return res.status(201).json({
-      success: true,
-      message: "Purchase order created successfully",
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  return res.status(201).json({
+    success: true,
+    message: "Purchase order created successfully",
+    data,
+  });
 };
 
 const getPurchaseOrders = async (req, res) => {
-  try {
-    const data = await procurementService.getPurchaseOrders();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await procurementService.getPurchaseOrders(pagination);
 
-    return res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  res.json({
+    success: true,
+    data: items,
+    pagination: toPagination(pagination, total),
+  });
 };
 
 const approvePurchaseOrder = async (req, res) => {
-  try {
-    const data = await procurementService.approvePurchaseOrder(req.params.id);
+  const data = await procurementService.approvePurchaseOrder(req.params.id);
 
-    return res.json({
-      success: true,
-      message: "Purchase order approved successfully",
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  return res.json({
+    success: true,
+    message: "Purchase order approved successfully",
+    data,
+  });
 };
 
 const createGoodsReceipt = async (req, res) => {
-  try {
-    const data = await procurementService.createGoodsReceipt(req.body);
+  const data = await procurementService.createGoodsReceipt(req.body);
 
-    return res.status(201).json({
-      success: true,
-      message: "Goods receipt created successfully",
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  return res.status(201).json({
+    success: true,
+    message: "Goods receipt created successfully",
+    data,
+  });
 };
 
 const getGoodsReceipts = async (req, res) => {
-  try {
-    const data = await procurementService.getGoodsReceipts();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await procurementService.getGoodsReceipts(pagination);
 
-    return res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  res.json({
+    success: true,
+    data: items,
+    pagination: toPagination(pagination, total),
+  });
 };
 
 const createPurchaseInvoice = async (req, res) => {
-  try {
-    const data = await procurementService.createPurchaseInvoice(req.body);
+  const data = await procurementService.createPurchaseInvoice(req.body);
 
-    return res.status(201).json({
-      success: true,
-      message: "Purchase invoice created successfully",
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  return res.status(201).json({
+    success: true,
+    message: "Purchase invoice created successfully",
+    data,
+  });
 };
 
 const getPurchaseInvoices = async (req, res) => {
-  try {
-    const data = await procurementService.getPurchaseInvoices();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await procurementService.getPurchaseInvoices(pagination);
 
-    return res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    return handleError(res, error);
-  }
+  res.json({
+    success: true,
+    data: items,
+    pagination: toPagination(pagination, total),
+  });
 };
 
 module.exports = {

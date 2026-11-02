@@ -1,0 +1,17 @@
+// Runs in every integration test worker before any application module loads.
+// Points the app's Prisma client at the test database and nothing else.
+const path = require("path");
+
+process.env.DOTENV_CONFIG_QUIET = "true";
+
+require("dotenv").config({ path: path.resolve(__dirname, "../../.env"), quiet: true });
+
+const { assertSafeTestDatabase } = require("./guard");
+
+assertSafeTestDatabase({
+  testUrl: process.env.TEST_DATABASE_URL,
+  devUrl: process.env.DATABASE_URL,
+});
+
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+process.env.NODE_ENV = "test";

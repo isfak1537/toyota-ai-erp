@@ -1,59 +1,36 @@
 const stockTransferService = require("../services/stock-transfer.service");
-
+const { parsePagination, toPagination } = require("../utils/pagination");
+const { parseId } = require("../utils/ids");
 const completeTransfer = async (req, res) => {
-  try {
-    const data = await stockTransferService.completeTransfer({
-      fromWarehouseId: Number(req.body.fromWarehouseId),
-      toWarehouseId: Number(req.body.toWarehouseId),
-      items: req.body.items,
-      notes: req.body.notes,
-    });
+  const data = await stockTransferService.completeTransfer(req.body);
 
-    res.status(201).json({
-      success: true,
-      message: "Stock transfer completed successfully",
-      data,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error.message,
-    });
-  }
+  res.status(201).json({
+    success: true,
+    message: "Stock transfer completed successfully",
+    data,
+  });
 };
 
 const getAllTransfers = async (req, res) => {
-  try {
-    const data = await stockTransferService.getAllTransfers();
+  const pagination = parsePagination(req.query);
+  const { items, total } = await stockTransferService.getAllTransfers(pagination);
 
-    res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    data: items,
+    pagination: toPagination(pagination, total),
+  });
 };
 
 const getTransferById = async (req, res) => {
-  try {
-    const data = await stockTransferService.getTransferById(
-      Number(req.params.id)
-    );
+  const data = await stockTransferService.getTransferById(
+    parseId(req.params.id)
+  );
 
-    res.json({
-      success: true,
-      data,
-    });
-  } catch (error) {
-    res.status(404).json({
-      success: false,
-      message: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    data,
+  });
 };
 
 module.exports = {
