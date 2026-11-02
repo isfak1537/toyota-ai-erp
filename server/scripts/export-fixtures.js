@@ -66,6 +66,17 @@ const buildFixtures = (dataset = buildDataset()) => {
       dataset.warehouses.map((w) => [warehouseId.get(w.code), w.code, w.name])
     ),
     "anomaly-labels.json": serializeLabels(dataset.anomalyLabels),
+    // Evaluation-only context for the notebooks (which products the seed steered
+    // to demo stock levels). The models never read this file.
+    "scenarios.json": `${JSON.stringify(
+      {
+        note: "Seed scenario profile per product. STEERED products have their last 12 days of demand shaped by the seed generator (SEED-007), so their last-days behaviour is synthetic demand shaping, not natural demand.",
+        steeredProfiles: ["NEAR_ROP", "TREND_FAST"],
+        profiles: Object.fromEntries(dataset.products.map((p) => [p.sku, p.profile])),
+      },
+      null,
+      2
+    )}\n`,
   };
 };
 

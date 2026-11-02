@@ -163,10 +163,9 @@ def evaluate_anomaly_detection(
         "labelled": int(truth.sum()),
     }
 
-    fp_table = false_positives.copy()
+    fp_table = false_positives.reset_index()  # `id` becomes an ordinary column
 
     if len(fp_table):
-        fp_table = fp_table.merge(ledger[["id", "product_id", "warehouse_id"]], on=["id", "product_id", "warehouse_id"], how="left")
         fp_table = fp_table.merge(products[["id", "sku"]].rename(columns={"id": "product_id"}), on="product_id", how="left")
 
     return AnomalyEvaluation(
@@ -177,3 +176,51 @@ def evaluate_anomaly_detection(
         ranking=ranking,
         transactions=len(frame),
     )
+
+
+def categorize_false_positives(
+    false_positives: pd.DataFrame, ledger: pd.DataFrame, labels: dict, steered_skus: set[str]
+) -> pd.DataFrame:
+    """Adds a likely cause to each false positive. Evaluation-only knowledge of how the synthetic data was built.
+
+    The causes are descriptive, not a claim that the detector was right to flag: an opening receipt or a
+    generator trim is a data artefact, a large goods receipt or an ordinary tail issue is a legitimate event
+    the detector cannot tell apart from an anomaly.
+    """
+    frame = false_positives.copy()
+
+    if frame.empty:
+        frame["likely_cause"] = pd.Series(dtype=object)
+        return frame
+
+    first_day = ledger["created_at"].min().strftime("%Y-%m-%d")
+    end_date = labels["endDate"]
+    window_start = (pd.Timestamp(end_date) - pd.Timedelta(days=11)).strftime("%Y-%m-%d")
+
+    def cause(row: pd.Series) -> str:
+        day = row["created_at"].strftime("%Y-%m-%d")
+
+        if row["type"] == "RECEIPT" and day == first_day:
+            return "opening stock received on day 1 (a one-off, large by design)"
+
+        if row["type"] == "ISSUE" and row["created_at"].strftime("%Y-%m-%d %H:%M") == f"{end_date} 10:30":
+            return "last-day trim: the generator landing a demo stock level (synthetic demand shaping)"
+
+        if row["type"] == "ISSUE" and row["sku"] in steered_skus and day >= window_start:
+            return "steered demo product, last 12 days (synthetic demand shaping)"
+
+        if row["type"] == "RECEIPT":
+            return "large goods receipt (a legitimate replenishment order)"
+
+        return "ordinary large movement (natural tail of the demand distribution)"
+
+    frame["likely_cause"] = frame.apply(cause, axis=1)
+
+    return frame
+
+
+ARTEFACT_MARKERS = ("synthetic demand shaping", "opening stock")
+
+
+def is_data_artefact(cause: str) -> bool:
+    return any(marker in cause for marker in ARTEFACT_MARKERS)

@@ -194,3 +194,43 @@ def test_the_summary_dict_is_json_ready(real):
     text = json.dumps(to_jsonable(ev.as_dict()), allow_nan=False)
 
     assert json.loads(text)["labelled"] == 8
+
+
+# ---- why a flagged row was not a labelled anomaly -----------------------------------------------------------
+
+
+def test_false_positives_are_given_a_likely_cause():
+    from app.anomaly.evaluate import categorize_false_positives, is_data_artefact
+
+    ledger = pd.DataFrame({"created_at": pd.to_datetime(["2026-08-04 02:30", "2026-11-01 10:30"])})
+    labels = {"endDate": "2026-11-01"}
+    rows = [
+        ("RECEIPT", "SYN-A", "2026-08-04 02:30"),  # opening stock, day one
+        ("ISSUE", "SYN-A", "2026-11-01 10:30"),  # the generator's last-day trim
+        ("ISSUE", "SYN-STEER", "2026-10-25 05:00"),  # steered product inside its last 12 days
+        ("ISSUE", "SYN-STEER", "2026-10-10 05:00"),  # steered product, but earlier: natural
+        ("ISSUE", "SYN-A", "2026-10-25 05:00"),  # not steered: natural
+        ("RECEIPT", "SYN-A", "2026-09-10 03:00"),  # an ordinary large replenishment receipt
+        ("ISSUE", "SYN-STEER", "2026-10-21 05:00"),  # the first day of the 12-day window (day index 78): steered
+        ("ISSUE", "SYN-STEER", "2026-10-20 05:00"),  # the day before the window: natural
+    ]
+    frame = pd.DataFrame(rows, columns=["type", "sku", "created_at"])
+    frame["created_at"] = pd.to_datetime(frame["created_at"])
+
+    out = categorize_false_positives(frame, ledger, labels, {"SYN-STEER"})
+    causes = list(out["likely_cause"])
+
+    assert causes[0].startswith("opening stock") and causes[1].startswith("last-day trim")
+    assert causes[2].startswith("steered demo product")
+    assert causes[3].startswith("ordinary large movement") and causes[4].startswith("ordinary large movement")
+    assert causes[5].startswith("large goods receipt") and causes[6].startswith("steered demo product")
+    assert causes[7].startswith("ordinary large movement")
+    assert [is_data_artefact(c) for c in causes] == [True, True, True, False, False, False, True, False]
+
+
+def test_categorizing_nothing_gives_an_empty_frame_with_the_column():
+    from app.anomaly.evaluate import categorize_false_positives
+
+    out = categorize_false_positives(pd.DataFrame(columns=["type", "sku", "created_at"]), pd.DataFrame({"created_at": pd.to_datetime(["2026-08-04"])}), {"endDate": "2026-11-01"}, set())
+
+    assert out.empty and "likely_cause" in out.columns
