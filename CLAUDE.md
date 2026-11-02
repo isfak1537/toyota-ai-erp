@@ -109,16 +109,22 @@ Keep `npm test` passing.
 ## Current status
 
 - P0 is merged and tagged `m1-stable-core`; P1 (synthetic data and reconcile) is merged and tagged `m2-seed`.
-- P2 + P3 (AI service) are built on branch `phase-2-ai-service` and wait for the owner's confirmation:
+- P2 + P3 (AI service, branch `phase-2-ai-service`):
   `GET /health`, `POST /forecast`, `POST /anomalies/score`, `POST /train` behind `X-AI-Service-Secret`; global
   gradient-boosting forecast vs a moving-average baseline (14-day holdout, nested selection estimate, sigma from
   residuals); rules R1-R5 + an Isolation Forest risk score with a weekly review queue (top 10 per local week, top contributing features), evaluated against `anomaly-labels.json`; model registry
   with deterministic versions; notebooks and `ai-service/REPORT.md`. The ERP API does not call it yet (P4).
+- P2 + P3 passed their gate and are merged and tagged `m3-ai-models` (live end-to-end run through the read-only role: green).
 - Next: P4 (ERP AI module: replenishment, suggestions, approval, minimal auth). Update this section when a phase gate passes.
 
 ### Pending verification
 
 - None.
+
+### P6 checklist (UI)
+
+- Anomalies page: show rule flags and the model review queue in **separate tabs** ("Confirmed rule hits" vs "Weekly review queue"), never as one list.
+- SEED-008: label the demo data as synthetic (footer or about page).
 
 ### Known gaps (not blocking)
 
@@ -153,7 +159,7 @@ Keep `npm test` passing.
   optimistic (nested estimate 1.414 vs 1.317 for always using the ML model); after the second anomaly pass the
   rules catch 7 of 8 and the weekly queue 6 of 8 (together 8 of 8), but flags rose from 33 to 147 and combined precision fell
   from 0.18 to 0.05; most of the recall gain comes from not scoring document-linked receipts, which blinds the model to a wrong
-  receipt that has a document. Rule R2 fires on ordinary tail events; a days-of-demand criterion is an owner decision.
+  receipt that has a document. Rule R2 fires on ordinary tail events; a days-of-demand criterion is an owner decision to revisit with real data.
   Thresholds were deliberately not tuned on 8 labels.
 - The AI service stores models as joblib pickles under `ai-service/models/` (gitignored): load only artefacts it trained
   itself. `/train` is synchronous (seconds on this data) and one run at a time.
