@@ -12,7 +12,8 @@
     "reconcile": "node scripts/reconcile.js",
     "seed:users": "node scripts/seed-users.js",
     "seed:export-fixtures": "node scripts/export-fixtures.js",
-    "test:live": "jest --selectProjects live"
+    "test:live": "jest --selectProjects live",
+    "test:loop": "bash scripts/test-loop.sh"
   },
   "jest": {
     "projects": [

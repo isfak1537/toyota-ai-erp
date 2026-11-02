@@ -45,6 +45,7 @@ npm run seed:synthetic           # synthetic demo data: DRY RUN by default
 npm run seed:users               # 4 demo users; passwords from DEMO_*_PASSWORD env (>= 12 chars), never printed
                                  #   -- --reset-passwords overwrites existing users' passwords
 npm run test:live                # optional: real Groq calls, only if GROQ_API_KEY is set (not part of npm test)
+npm run test:loop -- 20 --stop   # catch a flaky run: repeats npm test, saves failing output + context to ~/erp-flaky-logs (outside the repo)
 npm run reconcile                # inventory = last ledger balance + chain/document checks + reserved = reservedAfter
                                  #   -- --scope seed|all, --strict
 
@@ -146,7 +147,7 @@ Keep `npm test` passing.
   `npm run seed:synthetic -- --apply --replace` to refill the synthetic data with it.
 - `routes/category.routes.js` exists but is not mounted in `app.js` (categories have no API); mount it behind the master-data role if the UI needs it.
 - LLM daily cap counts audit rows (shared across instances); the per-minute window is per process.
-- One unexplained flaky run of the Node suite (5 failures in two suites, passed on the next 5 runs) was seen once in this phase and once earlier; not reproduced.
+- Two unexplained flaky runs of the Node suite were seen (one earlier, one in P4: failures in the route-access and transfer-pagination tests, green on the next runs). To capture one: `cd server && npm run test:loop -- 30` (add `--stop` to end at the first failure). Failing output goes to `~/erp-flaky-logs/<timestamp>-run<N>.log` with the commit, load and other node processes; send me that file.
 - The seed bulk-inserts back-dated stock history directly, bypassing the inventory service (the
   service cannot back-date). It is the one documented exception to "stock changes only through the
   service"; the CHECK constraints and `npm run reconcile` verify the result.

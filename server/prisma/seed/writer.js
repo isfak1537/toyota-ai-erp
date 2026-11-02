@@ -16,7 +16,37 @@ const seedSupplier = { code: { startsWith: SUPPLIER_PREFIX } };
 const seedWarehouse = { factory: { company: { code: COMPANY_CODE } } };
 const notSeedSupplier = { NOT: seedSupplier };
 
+// A requisition is seed-owned when everything on it is seed data: all its items are SYN- products and
+// its supplier (if any) is a SYN- supplier. This covers the ones the demo creates by approving an AI
+// suggestion. A requisition that mixes seed and other data is a blocker instead (see below).
+const seedRequisition = {
+  AND: [
+    { items: { some: { product: seedProduct } } },
+    { items: { none: { product: { NOT: seedProduct } } } },
+    { OR: [{ supplierId: null }, { supplier: seedSupplier }] },
+  ],
+};
+const touchesSeedRequisition = {
+  OR: [{ items: { some: { product: seedProduct } } }, { supplier: seedSupplier }],
+};
+
+// AI-module audit events about the actions of a demo (not LLM call accounting, which backs the daily
+// quota, and not model runs, which describe the AI service's models rather than seed data).
+const AI_DEMO_EVENTS = [
+  "REPLENISHMENT_RUN",
+  "SUGGESTION_APPROVED",
+  "SUGGESTION_REJECTED",
+  "ANOMALY_SYNC",
+  "ANOMALY_REVIEWED",
+  "ASSISTANT_QUESTION",
+  "GOODS_RECEIPT_WAREHOUSE_OVERRIDE",
+];
+
 const owned = {
+  // AI rows that hang off seed entities (suggestions of seed products, flags on seed ledger rows)
+  aiSuggestion: { OR: [{ product: seedProduct }, { warehouse: seedWarehouse }, { supplier: seedSupplier }] },
+  anomalyFlag: { transaction: { OR: [{ product: seedProduct }, { warehouse: seedWarehouse }] } },
+  aiAuditLog: { eventType: { in: AI_DEMO_EVENTS } },
   inventoryTransaction: { OR: [{ product: seedProduct }, { warehouse: seedWarehouse }] },
   stockTransferItem: {
     OR: [
@@ -36,6 +66,8 @@ const owned = {
   purchaseInvoice: { supplier: seedSupplier },
   purchaseOrderItem: { OR: [{ product: seedProduct }, { purchaseOrder: { supplier: seedSupplier } }] },
   purchaseOrder: { supplier: seedSupplier },
+  purchaseRequisitionItem: { requisition: seedRequisition },
+  purchaseRequisition: seedRequisition,
   inventory: { OR: [{ product: seedProduct }, { warehouse: seedWarehouse }] },
   supplierProduct: { OR: [{ product: seedProduct }, { supplier: seedSupplier }] },
   product: seedProduct,
@@ -48,6 +80,9 @@ const owned = {
 
 // Deletion order respects foreign keys (children first).
 const DELETE_ORDER = [
+  "anomalyFlag", // before the ledger rows it points at
+  "aiSuggestion", // before the requisitions they are linked to (an APPROVED one must keep its requisition)
+  "aiAuditLog",
   "inventoryTransaction",
   "stockTransferItem",
   "stockTransfer",
@@ -57,6 +92,8 @@ const DELETE_ORDER = [
   "purchaseInvoice",
   "purchaseOrderItem",
   "purchaseOrder",
+  "purchaseRequisitionItem", // after the POs created from them
+  "purchaseRequisition",
   "inventory",
   "supplierProduct",
   "product",
@@ -71,9 +108,10 @@ const DELETE_ORDER = [
 // orphan or silently delete somebody else's data, so it refuses instead.
 const blockerQueries = {
   "sales order items using SYN- products": (c) => c.salesOrderItem.count({ where: { product: seedProduct } }),
-  "requisitions using SYN- products or suppliers": async (c) =>
-    (await c.purchaseRequisitionItem.count({ where: { product: seedProduct } })) +
-    (await c.purchaseRequisition.count({ where: { supplier: seedSupplier } })),
+  "requisitions mixing SYN- and other products or suppliers": (c) =>
+    c.purchaseRequisition.count({ where: { AND: [touchesSeedRequisition, { NOT: seedRequisition }] } }),
+  "non-seed purchase orders created from a SYN- requisition": (c) =>
+    c.purchaseOrder.count({ where: { requisition: seedRequisition, supplier: notSeedSupplier } }),
   "non-seed PO lines for SYN- products": (c) =>
     c.purchaseOrderItem.count({ where: { product: seedProduct, purchaseOrder: { supplier: notSeedSupplier } } }),
   "non-seed receipt lines for SYN- products": (c) =>
@@ -95,13 +133,20 @@ const blockerQueries = {
     }),
 };
 
+// Listed in the report, but alone they do not make a database "contain seed data": audit rows exist
+// wherever the AI module was used.
+const NOT_SEED_BY_THEMSELVES = new Set(["aiAuditLog"]);
+
 const describeSeedData = async (client) => {
   const counts = {};
   let total = 0;
 
   for (const model of DELETE_ORDER) {
     counts[model] = await client[model].count({ where: owned[model] });
-    total += counts[model];
+
+    if (!NOT_SEED_BY_THEMSELVES.has(model)) {
+      total += counts[model];
+    }
   }
 
   return { counts, total };
@@ -126,8 +171,16 @@ const replaceSeedData = async (prisma) =>
     async (tx) => {
       const deleted = {};
 
+      // A requisition is seed-owned because of its items, and the items are deleted first: pin the
+      // set of requisitions (by id) before anything is deleted, or they would stop matching.
+      const requisitionIds = (await tx.purchaseRequisition.findMany({ where: owned.purchaseRequisition, select: { id: true } })).map((r) => r.id);
+      const pinned = {
+        purchaseRequisitionItem: { requisitionId: { in: requisitionIds } },
+        purchaseRequisition: { id: { in: requisitionIds } },
+      };
+
       for (const model of DELETE_ORDER) {
-        const result = await tx[model].deleteMany({ where: owned[model] });
+        const result = await tx[model].deleteMany({ where: pinned[model] ?? owned[model] });
         deleted[model] = result.count;
       }
 
