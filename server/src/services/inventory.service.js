@@ -1,4 +1,10 @@
+const { InventoryTransactionType } = require("@prisma/client");
 const prisma = require("../config/prisma");
+const {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} = require("../errors/app-error");
 
 const getInventoryOrThrow = async (tx, id) => {
   const inventory = await tx.inventory.findUnique({
@@ -14,7 +20,7 @@ const getInventoryOrThrow = async (tx, id) => {
   });
 
   if (!inventory) {
-    throw new Error("Inventory record not found");
+    throw new NotFoundError("Inventory record not found");
   }
 
   return inventory;
@@ -27,23 +33,23 @@ const validateProductAndWarehouse = async (tx, productId, warehouseId) => {
   ]);
 
   if (!product) {
-    throw new Error("Product not found");
+    throw new NotFoundError("Product not found");
   }
 
   if (!product.isActive) {
-    throw new Error("Product is inactive");
+    throw new ConflictError("Product is inactive");
   }
 
   if (!product.isStockTracked) {
-    throw new Error("Stock tracking is disabled for this product");
+    throw new ConflictError("Stock tracking is disabled for this product");
   }
 
   if (!warehouse) {
-    throw new Error("Warehouse not found");
+    throw new NotFoundError("Warehouse not found");
   }
 
   if (!warehouse.isActive) {
-    throw new Error("Warehouse is inactive");
+    throw new ConflictError("Warehouse is inactive");
   }
 
   return { product, warehouse };
@@ -53,7 +59,7 @@ const createInventory = async (data) => {
   const { productId, warehouseId, quantity = 0, reservedQuantity = 0 } = data;
 
   if (quantity < 0 || reservedQuantity < 0) {
-    throw new Error("Quantity cannot be negative");
+    throw new ValidationError("Quantity cannot be negative");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -69,7 +75,7 @@ const createInventory = async (data) => {
     });
 
     if (existing) {
-      throw new Error("Inventory record already exists for this product and warehouse");
+      throw new ConflictError("Inventory record already exists for this product and warehouse");
     }
 
     return tx.inventory.create({
@@ -109,7 +115,7 @@ const updateInventory = async (id, data) => {
     data.quantity !== undefined ||
     data.reservedQuantity !== undefined
   ) {
-    throw new Error(
+    throw new ValidationError(
       "Direct stock quantity changes are not allowed. Use receive, issue, adjust, reserve, or release operations."
     );
   }
@@ -143,7 +149,7 @@ const receiveStock = async ({
   reason,
 }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
-    throw new Error("Receipt quantity must be a positive integer");
+    throw new ValidationError("Receipt quantity must be a positive integer");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -159,7 +165,7 @@ const receiveStock = async ({
     });
 
     if (!inventory) {
-      throw new Error("Inventory record not found");
+      throw new NotFoundError("Inventory record not found");
     }
 
     const newQuantity = inventory.quantity + quantity;
@@ -208,7 +214,7 @@ const issueStock = async ({
   reason,
 }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
-    throw new Error("Issue quantity must be a positive integer");
+    throw new ValidationError("Issue quantity must be a positive integer");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -224,14 +230,14 @@ const issueStock = async ({
     });
 
     if (!inventory) {
-      throw new Error("Inventory record not found");
+      throw new NotFoundError("Inventory record not found");
     }
 
     const availableQuantity =
       inventory.quantity - inventory.reservedQuantity;
 
     if (quantity > availableQuantity) {
-      throw new Error(
+      throw new ConflictError(
         `Insufficient available stock. Available: ${availableQuantity}, requested: ${quantity}`
       );
     }
@@ -282,7 +288,7 @@ const adjustStock = async ({
   reason,
 }) => {
   if (!Number.isInteger(quantity) || quantity === 0) {
-    throw new Error("Adjustment quantity must be a non-zero integer");
+    throw new ValidationError("Adjustment quantity must be a non-zero integer");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -298,17 +304,17 @@ const adjustStock = async ({
     });
 
     if (!inventory) {
-      throw new Error("Inventory record not found");
+      throw new NotFoundError("Inventory record not found");
     }
 
     const newQuantity = inventory.quantity + quantity;
 
     if (newQuantity < 0) {
-      throw new Error("Adjustment would result in negative stock");
+      throw new ConflictError("Adjustment would result in negative stock");
     }
 
     if (newQuantity < inventory.reservedQuantity) {
-      throw new Error(
+      throw new ConflictError(
         `Adjustment would make stock lower than reserved quantity (${inventory.reservedQuantity})`
       );
     }
@@ -357,7 +363,7 @@ const reserveStock = async ({
   reason,
 }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
-    throw new Error("Reservation quantity must be a positive integer");
+    throw new ValidationError("Reservation quantity must be a positive integer");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -373,14 +379,14 @@ const reserveStock = async ({
     });
 
     if (!inventory) {
-      throw new Error("Inventory record not found");
+      throw new NotFoundError("Inventory record not found");
     }
 
     const availableQuantity =
       inventory.quantity - inventory.reservedQuantity;
 
     if (quantity > availableQuantity) {
-      throw new Error(
+      throw new ConflictError(
         `Insufficient available stock for reservation. Available: ${availableQuantity}, requested: ${quantity}`
       );
     }
@@ -432,7 +438,7 @@ const releaseStock = async ({
   reason,
 }) => {
   if (!Number.isInteger(quantity) || quantity <= 0) {
-    throw new Error("Release quantity must be a positive integer");
+    throw new ValidationError("Release quantity must be a positive integer");
   }
 
   return prisma.$transaction(async (tx) => {
@@ -446,11 +452,11 @@ const releaseStock = async ({
     });
 
     if (!inventory) {
-      throw new Error("Inventory record not found");
+      throw new NotFoundError("Inventory record not found");
     }
 
     if (quantity > inventory.reservedQuantity) {
-      throw new Error(
+      throw new ConflictError(
         `Cannot release ${quantity}. Reserved quantity: ${inventory.reservedQuantity}`
       );
     }
@@ -503,13 +509,27 @@ const getTransactions = async ({
 
   if (productId) {
     where.productId = Number(productId);
+
+    if (!Number.isInteger(where.productId) || where.productId <= 0) {
+      throw new ValidationError("productId must be a positive integer");
+    }
   }
 
   if (warehouseId) {
     where.warehouseId = Number(warehouseId);
+
+    if (!Number.isInteger(where.warehouseId) || where.warehouseId <= 0) {
+      throw new ValidationError("warehouseId must be a positive integer");
+    }
   }
 
   if (type) {
+    if (!Object.values(InventoryTransactionType).includes(type)) {
+      throw new ValidationError(
+        `type must be one of: ${Object.values(InventoryTransactionType).join(", ")}`
+      );
+    }
+
     where.type = type;
   }
 
