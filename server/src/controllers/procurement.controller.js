@@ -2,7 +2,7 @@ const procurementService = require("../services/procurement.service");
 const { parsePagination, toPagination } = require("../utils/pagination");
 
 const createRequisition = async (req, res) => {
-  const data = await procurementService.createRequisition(req.body);
+  const data = await procurementService.createRequisition(req.body, req.user.id);
 
   return res.status(201).json({
     success: true,
@@ -33,7 +33,7 @@ const submitRequisition = async (req, res) => {
 };
 
 const approveRequisition = async (req, res) => {
-  const data = await procurementService.approveRequisition(req.params.id);
+  const data = await procurementService.approveRequisition(req.params.id, req.user.id);
 
   return res.json({
     success: true,
@@ -64,7 +64,7 @@ const getPurchaseOrders = async (req, res) => {
 };
 
 const approvePurchaseOrder = async (req, res) => {
-  const data = await procurementService.approvePurchaseOrder(req.params.id);
+  const data = await procurementService.approvePurchaseOrder(req.params.id, req.user.id);
 
   return res.json({
     success: true,
@@ -74,7 +74,7 @@ const approvePurchaseOrder = async (req, res) => {
 };
 
 const createGoodsReceipt = async (req, res) => {
-  const data = await procurementService.createGoodsReceipt(req.body);
+  const data = await procurementService.createGoodsReceipt(req.body, req.user);
 
   return res.status(201).json({
     success: true,

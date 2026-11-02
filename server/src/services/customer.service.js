@@ -1,3 +1,4 @@
+const { ConflictError, NotFoundError, ValidationError } = require("../errors/app-error");
 const prisma = require("../config/prisma");
 
 const customerRepository = require("../repositories/customer.repository");
@@ -11,7 +12,7 @@ function toId(value, fieldName = "id") {
   const id = Number(value);
 
   if (!Number.isInteger(id) || id <= 0) {
-    throw new Error(`${fieldName} must be a positive integer`);
+    throw new ValidationError(`${fieldName} must be a positive integer`);
   }
 
   return id;
@@ -26,7 +27,7 @@ async function createCustomer(input) {
     );
 
   if (existingCustomer) {
-    throw new Error("Customer code already exists");
+    throw new ConflictError("Customer code already exists");
   }
 
   if (data.companyId !== undefined) {
@@ -37,11 +38,11 @@ async function createCustomer(input) {
     });
 
     if (!company) {
-      throw new Error("Company not found");
+      throw new NotFoundError("Company not found");
     }
 
     if (!company.isActive) {
-      throw new Error("Company is inactive");
+      throw new ConflictError("Company is inactive");
     }
   }
 
@@ -78,7 +79,7 @@ async function getAllCustomers(query = {}) {
     ) {
       isActive = false;
     } else {
-      throw new Error("isActive must be true or false");
+      throw new ValidationError("isActive must be true or false");
     }
   }
 
@@ -96,7 +97,7 @@ async function getCustomerById(id) {
     await customerRepository.findCustomerById(customerId);
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new NotFoundError("Customer not found");
   }
 
   return customer;
@@ -109,7 +110,7 @@ async function updateCustomer(id, input) {
     await customerRepository.findCustomerById(customerId);
 
   if (!existingCustomer) {
-    throw new Error("Customer not found");
+    throw new NotFoundError("Customer not found");
   }
 
   const data = updateCustomerSchema.parse(input);
@@ -127,7 +128,7 @@ async function deactivateCustomer(id) {
     await customerRepository.findCustomerById(customerId);
 
   if (!customer) {
-    throw new Error("Customer not found");
+    throw new NotFoundError("Customer not found");
   }
 
   return customerRepository.updateCustomer(customerId, {

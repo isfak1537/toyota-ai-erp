@@ -15,6 +15,8 @@ const {
 } = require("../controllers/procurement.controller");
 
 const validate = require("../middlewares/validate.middleware");
+const { requireRole } = require("../middlewares/auth.middleware");
+const roles = require("../middlewares/roles");
 const {
   createRequisitionSchema,
   createPurchaseOrderSchema,
@@ -24,21 +26,21 @@ const {
 
 const router = express.Router();
 
-router.post("/requisitions", validate(createRequisitionSchema), createRequisition);
+router.post("/requisitions", requireRole(...roles.PROCUREMENT), validate(createRequisitionSchema), createRequisition);
 router.get("/requisitions", getRequisitions);
 
-router.post("/requisitions/:id/submit", submitRequisition);
-router.post("/requisitions/:id/approve", approveRequisition);
+router.post("/requisitions/:id/submit", requireRole(...roles.PROCUREMENT), submitRequisition);
+router.post("/requisitions/:id/approve", requireRole(...roles.PROCUREMENT), approveRequisition);
 
-router.post("/purchase-orders", validate(createPurchaseOrderSchema), createPurchaseOrder);
+router.post("/purchase-orders", requireRole(...roles.PROCUREMENT), validate(createPurchaseOrderSchema), createPurchaseOrder);
 router.get("/purchase-orders", getPurchaseOrders);
 
-router.post("/purchase-orders/:id/approve", approvePurchaseOrder);
+router.post("/purchase-orders/:id/approve", requireRole(...roles.PROCUREMENT), approvePurchaseOrder);
 
-router.post("/goods-receipts", validate(createGoodsReceiptSchema), createGoodsReceipt);
+router.post("/goods-receipts", requireRole(...roles.GOODS_RECEIPT), validate(createGoodsReceiptSchema), createGoodsReceipt);
 router.get("/goods-receipts", getGoodsReceipts);
 
-router.post("/purchase-invoices", validate(createPurchaseInvoiceSchema), createPurchaseInvoice);
+router.post("/purchase-invoices", requireRole(...roles.PROCUREMENT), validate(createPurchaseInvoiceSchema), createPurchaseInvoice);
 router.get("/purchase-invoices", getPurchaseInvoices);
 
 module.exports = router;

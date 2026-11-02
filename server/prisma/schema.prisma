@@ -60,6 +60,10 @@ model Warehouse {
 
   goodsReceipts GoodsReceipt[]
 
+  requisitionsDestined   PurchaseRequisition[] @relation("RequisitionDestination")
+  purchaseOrdersDestined PurchaseOrder[]       @relation("PurchaseOrderDestination")
+  aiSuggestions          AiSuggestion[]
+
   @@unique([factoryId, code])
   @@index([factoryId])
   @@index([isActive])
@@ -102,6 +106,7 @@ model Product {
   goodsReceiptItems    GoodsReceiptItem[]
   purchaseInvoiceItems PurchaseInvoiceItem[]
   salesOrderItems      SalesOrderItem[]
+  aiSuggestions        AiSuggestion[]
 
   @@index([categoryId])
   @@index([isActive])
@@ -125,6 +130,7 @@ model Supplier {
   purchaseRequisitions PurchaseRequisition[]
   purchaseOrders       PurchaseOrder[]
   purchaseInvoices     PurchaseInvoice[]
+  aiSuggestions        AiSuggestion[]
 
   @@index([isActive])
 }
@@ -260,13 +266,19 @@ model InventoryTransaction {
   referenceType String?
   referenceId   Int?
   reason        String?
+  // Reserved quantity after this movement (mirrors balanceAfter). NULL on rows written before this column existed.
+  reservedAfter Int?
+  createdById   Int?
   createdAt     DateTime                 @default(now())
 
-  product   Product   @relation(fields: [productId], references: [id])
-  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+  product     Product      @relation(fields: [productId], references: [id])
+  warehouse   Warehouse    @relation(fields: [warehouseId], references: [id])
+  createdBy   User?        @relation("TransactionCreatedBy", fields: [createdById], references: [id])
+  anomalyFlag AnomalyFlag?
 
   @@index([productId])
   @@index([warehouseId])
+  @@index([createdById])
   @@index([type])
   @@index([createdAt])
   @@index([referenceType, referenceId])
@@ -319,20 +331,33 @@ enum PurchaseRequisitionStatus {
 }
 
 model PurchaseRequisition {
-  id                Int                       @id @default(autoincrement())
-  requisitionNumber String                    @unique
-  requesterName     String
-  supplierId        Int?
-  status            PurchaseRequisitionStatus @default(DRAFT)
-  notes             String?
-  createdAt         DateTime                  @default(now())
-  updatedAt         DateTime                  @updatedAt
+  id                     Int                       @id @default(autoincrement())
+  requisitionNumber      String                    @unique
+  requesterName          String
+  supplierId             Int?
+  status                 PurchaseRequisitionStatus @default(DRAFT)
+  notes                  String?
+  // Where the goods are meant to arrive; inherited by purchase orders created from this requisition.
+  destinationWarehouseId Int?
+  createdById            Int?
+  approvedById           Int?
+  // Origin of the requisition, e.g. sourceType "AI_SUGGESTION" with the suggestion id.
+  sourceType             String?
+  sourceId               Int?
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
 
-  supplier       Supplier?                 @relation(fields: [supplierId], references: [id])
-  items          PurchaseRequisitionItem[]
-  purchaseOrders PurchaseOrder[]
+  supplier             Supplier?                 @relation(fields: [supplierId], references: [id])
+  destinationWarehouse Warehouse?                @relation("RequisitionDestination", fields: [destinationWarehouseId], references: [id])
+  createdBy            User?                     @relation("RequisitionCreatedBy", fields: [createdById], references: [id])
+  approvedBy           User?                     @relation("RequisitionApprovedBy", fields: [approvedById], references: [id])
+  items                PurchaseRequisitionItem[]
+  purchaseOrders       PurchaseOrder[]
+  aiSuggestion         AiSuggestion?
 
   @@index([supplierId])
+  @@index([destinationWarehouseId])
+  @@index([sourceType, sourceId])
   @@index([status])
 }
 
@@ -360,28 +385,33 @@ enum PurchaseOrderStatus {
 }
 
 model PurchaseOrder {
-  id            Int                 @id @default(autoincrement())
-  poNumber      String              @unique
-  supplierId    Int
-  requisitionId Int?
-  status        PurchaseOrderStatus @default(DRAFT)
-  orderDate     DateTime            @default(now())
-  expectedDate  DateTime?
-  notes         String?
-  subtotal      Decimal             @db.Decimal(14, 2)
-  taxAmount     Decimal             @default(0) @db.Decimal(14, 2)
-  totalAmount   Decimal             @db.Decimal(14, 2)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  id                     Int                 @id @default(autoincrement())
+  poNumber               String              @unique
+  supplierId             Int
+  requisitionId          Int?
+  status                 PurchaseOrderStatus @default(DRAFT)
+  orderDate              DateTime            @default(now())
+  expectedDate           DateTime?
+  notes                  String?
+  subtotal               Decimal             @db.Decimal(14, 2)
+  taxAmount              Decimal             @default(0) @db.Decimal(14, 2)
+  totalAmount            Decimal             @db.Decimal(14, 2)
+  destinationWarehouseId Int?
+  approvedById           Int?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
 
-  supplier      Supplier             @relation(fields: [supplierId], references: [id])
-  requisition   PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
-  items         PurchaseOrderItem[]
-  goodsReceipts GoodsReceipt[]
-  invoices      PurchaseInvoice[]
+  supplier             Supplier             @relation(fields: [supplierId], references: [id])
+  requisition          PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
+  destinationWarehouse Warehouse?           @relation("PurchaseOrderDestination", fields: [destinationWarehouseId], references: [id])
+  approvedBy           User?                @relation("PurchaseOrderApprovedBy", fields: [approvedById], references: [id])
+  items                PurchaseOrderItem[]
+  goodsReceipts        GoodsReceipt[]
+  invoices             PurchaseInvoice[]
 
   @@index([supplierId])
   @@index([requisitionId])
+  @@index([destinationWarehouseId])
   @@index([status])
 }
 
@@ -415,11 +445,13 @@ model GoodsReceipt {
   status          GoodsReceiptStatus @default(RECEIVED)
   receiptDate     DateTime           @default(now())
   notes           String?
+  createdById     Int?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
   purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
   warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
+  createdBy     User?              @relation("GoodsReceiptCreatedBy", fields: [createdById], references: [id])
   items         GoodsReceiptItem[]
 
   @@index([purchaseOrderId])
@@ -488,4 +520,155 @@ model PurchaseInvoiceItem {
 
   @@index([purchaseInvoiceId])
   @@index([productId])
+}
+
+// ---------------------------------------------------------------- Auth and AI module (P4/P5)
+
+enum Role {
+  ADMIN
+  WAREHOUSE_MANAGER
+  PROCUREMENT_OFFICER
+  VIEWER
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  transactions           InventoryTransaction[] @relation("TransactionCreatedBy")
+  requisitionsCreated    PurchaseRequisition[]  @relation("RequisitionCreatedBy")
+  requisitionsApproved   PurchaseRequisition[]  @relation("RequisitionApprovedBy")
+  purchaseOrdersApproved PurchaseOrder[]        @relation("PurchaseOrderApprovedBy")
+  goodsReceiptsCreated   GoodsReceipt[]         @relation("GoodsReceiptCreatedBy")
+  suggestionsDecided     AiSuggestion[]         @relation("SuggestionDecidedBy")
+  anomaliesReviewed      AnomalyFlag[]          @relation("AnomalyReviewedBy")
+  auditLogs              AiAuditLog[]           @relation("AuditActor")
+
+  @@index([role])
+}
+
+enum AiSuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+// A replenishment suggestion (AI-004..AI-007). All inputs are stored so the number can be reproduced (NFR-013).
+// "At most one PENDING per product and warehouse" is enforced by a partial unique index in the migration SQL.
+model AiSuggestion {
+  id                Int                @id @default(autoincrement())
+  runId             String
+  productId         Int
+  warehouseId       Int
+  supplierId        Int
+  suggestedQty      Int
+  forecastDaily     Float
+  sigma             Float
+  leadTimeDays      Int
+  minimumOrderQty   Int
+  safetyStock       Float
+  reorderPoint      Float
+  available         Int
+  onOrder           Int
+  // DESTINATION, DEMAND_SHARE, DESTINATION+DEMAND_SHARE or NONE
+  onOrderMethod     String
+  // Full calculation inputs for transparency, incl. the unrounded onOrder and the demand share (onOrder above is floored).
+  inputs            Json
+  zValue            Float
+  reviewDays        Int
+  forecastModel     String
+  modelVersion      String
+  explanation       String?
+  // "LLM:<provider>:<model>" when an LLM wrote the explanation, NULL otherwise
+  explanationSource String?
+  status            AiSuggestionStatus @default(PENDING)
+  rejectReason      String?
+  decidedById       Int?
+  decidedAt         DateTime?
+  requisitionId     Int?               @unique
+  createdAt         DateTime           @default(now())
+
+  product     Product              @relation(fields: [productId], references: [id])
+  warehouse   Warehouse            @relation(fields: [warehouseId], references: [id])
+  supplier    Supplier             @relation(fields: [supplierId], references: [id])
+  decidedBy   User?                @relation("SuggestionDecidedBy", fields: [decidedById], references: [id])
+  requisition PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
+
+  @@index([status])
+  @@index([productId, warehouseId])
+  @@index([runId])
+}
+
+enum AnomalySource {
+  MODEL
+  RULE
+  BOTH
+}
+
+enum AnomalyStatus {
+  OPEN
+  REVIEWED
+}
+
+// One flag per stock transaction (AI-008). Rule hits and review-queue entries are told apart by source,
+// ruleCodes and queueRank so the UI can show them separately.
+model AnomalyFlag {
+  id                     Int           @id @default(autoincrement())
+  inventoryTransactionId Int           @unique
+  score                  Float
+  reason                 String
+  source                 AnomalySource
+  ruleCodes              String[]
+  queueRank              Int?
+  period                 String?
+  topFeatures            Json?
+  modelVersion           String?
+  explanation            String?
+  explanationSource      String?
+  status                 AnomalyStatus @default(OPEN)
+  reviewedById           Int?
+  reviewedAt             DateTime?
+  reviewNote             String?
+  createdAt              DateTime      @default(now())
+
+  transaction InventoryTransaction @relation(fields: [inventoryTransactionId], references: [id])
+  reviewedBy  User?                @relation("AnomalyReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([source])
+}
+
+enum AiModelType {
+  FORECAST
+  ANOMALY
+}
+
+model AiModelRun {
+  id        Int         @id @default(autoincrement())
+  modelType AiModelType
+  version   String
+  metrics   Json
+  trainedAt DateTime    @default(now())
+  isActive  Boolean     @default(false)
+
+  @@index([modelType, isActive])
+}
+
+model AiAuditLog {
+  id          Int      @id @default(autoincrement())
+  eventType   String
+  actorUserId Int?
+  payload     Json
+  createdAt   DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorUserId], references: [id])
+
+  @@index([eventType, createdAt])
+  @@index([actorUserId])
 }

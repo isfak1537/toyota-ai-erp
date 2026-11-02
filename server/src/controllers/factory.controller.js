@@ -1,76 +1,56 @@
 const factoryService = require("../services/factory.service");
 
-const createFactory = async (req, res, next) => {
-  try {
-    const factory = await factoryService.createFactory(req.body);
+const createFactory = async (req, res) => {
+  const factory = await factoryService.createFactory(req.body);
 
-    res.status(201).json({
-      success: true,
-      message: "Factory created successfully",
-      data: factory,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(201).json({
+    success: true,
+    message: "Factory created successfully",
+    data: factory,
+  });
 };
 
-const getAllFactories = async (req, res, next) => {
-  try {
-    const factories = await factoryService.getAllFactories();
+const getAllFactories = async (req, res) => {
+  const factories = await factoryService.getAllFactories();
 
-    res.json({
-      success: true,
-      data: factories,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    success: true,
+    data: factories,
+  });
 };
 
-const getFactoryById = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
+const getFactoryById = async (req, res) => {
+  const id = Number(req.params.id);
 
-    const factory = await factoryService.getFactoryById(id);
+  const factory = await factoryService.getFactoryById(id);
 
-    res.json({
-      success: true,
-      data: factory,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    success: true,
+    data: factory,
+  });
 };
 
-const updateFactory = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
+const updateFactory = async (req, res) => {
+  const id = Number(req.params.id);
 
-    const factory = await factoryService.updateFactory(id, req.body);
+  const factory = await factoryService.updateFactory(id, req.body);
 
-    res.json({
-      success: true,
-      message: "Factory updated successfully",
-      data: factory,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    success: true,
+    message: "Factory updated successfully",
+    data: factory,
+  });
 };
 
-const deleteFactory = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
+const deleteFactory = async (req, res) => {
+  const id = Number(req.params.id);
 
-    await factoryService.deactivateFactory(id);
+  await factoryService.deactivateFactory(id);
 
-    res.json({
-      success: true,
-      message: "Factory deactivated successfully",
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.json({
+    success: true,
+    message: "Factory deactivated successfully",
+  });
 };
 
 module.exports = {

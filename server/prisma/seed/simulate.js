@@ -115,6 +115,7 @@ const simulateSeries = (cfg) => {
       type,
       quantity,
       balanceAfter: onHand,
+      reservedAfter: reserved,
       ts,
       referenceType: null,
       ref: null,

@@ -4,6 +4,7 @@ const express = require("express");
 const request = require("supertest");
 
 const app = require("../../src/app");
+const { authed } = require("../helpers/http");
 const errorMiddleware = require("../../src/middlewares/error.middleware");
 const { prisma, resetDatabase, disconnect } = require("../helpers/db");
 const f = require("../helpers/factories");
@@ -47,7 +48,7 @@ describe("real Prisma error shapes", () => {
   it("P2002: a real duplicate SKU maps to 409 with the specific message", async () => {
     const product = await f.createProduct({ sku: "DUP-1" });
 
-    const res = await request(app)
+    const res = await authed(app)
       .post("/api/v1/products")
       .send({ sku: product.sku, name: "Other", price: 1, unit: "pcs" });
 
@@ -75,7 +76,7 @@ describe("real Prisma error shapes", () => {
   });
 
   it("P2025: a real update of a missing row maps to 404", async () => {
-    const res = await request(app).patch("/api/v1/inventory/999999").send({});
+    const res = await authed(app).patch("/api/v1/inventory/999999").send({});
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ success: false, message: "Record not found" });
@@ -84,7 +85,7 @@ describe("real Prisma error shapes", () => {
   it("an unknown field is rejected by validation before it can reach Prisma", async () => {
     const s = await f.stockScenario({ quantity: 1 });
 
-    const res = await request(app)
+    const res = await authed(app)
       .patch(`/api/v1/inventory/${s.inventory.id}`)
       .send({ notAField: true });
 

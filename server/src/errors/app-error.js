@@ -44,7 +44,15 @@ class ConflictError extends AppError {
   }
 }
 
+// A dependency (the AI service, an LLM) is down, slow or misconfigured. The ERP itself is fine.
+class ServiceUnavailableError extends AppError {
+  constructor(message = "Service temporarily unavailable") {
+    super(message, 503);
+  }
+}
+
 module.exports = {
+  ServiceUnavailableError,
   AppError,
   ValidationError,
   UnauthorizedError,

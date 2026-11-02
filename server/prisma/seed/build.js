@@ -383,6 +383,7 @@ const buildDataset = ({ seed = SEED_DEFAULT, endDate = END_DATE_DEFAULT } = {}) 
       type: event.type,
       quantity: event.quantity,
       balanceAfter: event.balanceAfter,
+      reservedAfter: event.reservedAfter,
       createdAt: new Date(event.ts).toISOString(),
       referenceType: event.referenceType,
       reference: refNumber(event.ref),

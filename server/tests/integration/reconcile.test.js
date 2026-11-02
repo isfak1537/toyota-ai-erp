@@ -189,7 +189,7 @@ describe("scope, warnings and strict mode", () => {
   it("treats a manual series that starts above zero as a warning in scope all and ignores it in scope seed", async () => {
     const s = await f.stockScenario({ quantity: 10 });
     await prisma.inventoryTransaction.create({
-      data: { productId: s.product.id, warehouseId: s.warehouse.id, type: "ISSUE", quantity: -3, balanceAfter: 7 },
+      data: { productId: s.product.id, warehouseId: s.warehouse.id, type: "ISSUE", quantity: -3, balanceAfter: 7, reservedAfter: 0 },
     });
     await prisma.inventory.update({ where: { id: s.inventory.id }, data: { quantity: 7 } });
 

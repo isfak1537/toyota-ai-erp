@@ -8,9 +8,9 @@
 //
 // Read-only. Exit code 0 = consistent, 1 = errors found (or warnings under --strict).
 //
-// Not checked: reserved quantity. A RESERVATION/RELEASE ledger row has quantity 0
-// and the amount only appears in its free-text reason, so it cannot be rebuilt
-// from the ledger. A reservedDelta/reservedAfter column is planned for P4.
+// Reserved quantity: every ledger row written since P4 carries reservedAfter, so the
+// newest such row of a series must equal Inventory.reservedQuantity. Older rows have
+// reservedAfter NULL; a series with none is skipped (counted, not an error).
 const { Prisma } = require("@prisma/client");
 const { SKU_PREFIX, SUPPLIER_PREFIX } = require("../prisma/seed/config");
 
@@ -116,6 +116,41 @@ const reconcile = async (prisma, { scope = "all", strict = false } = {}) => {
         }
       }
     }
+    results.push(result);
+  }
+
+  // 2b. reserved quantity = newest reservedAfter in the ledger
+  {
+    const result = check("reserved = last ledger reservedAfter");
+    const rows = await prisma.$queryRaw`
+      SELECT p."sku", w."code" AS warehouse, i."reservedQuantity",
+        (SELECT t."reservedAfter" FROM "InventoryTransaction" t
+          WHERE t."productId" = i."productId" AND t."warehouseId" = i."warehouseId" AND t."reservedAfter" IS NOT NULL
+          ORDER BY t."createdAt" DESC, t."id" DESC LIMIT 1) AS last_reserved,
+        EXISTS (SELECT 1 FROM "InventoryTransaction" t
+          WHERE t."productId" = i."productId" AND t."warehouseId" = i."warehouseId") AS has_ledger
+      FROM "Inventory" i
+      JOIN "Product" p ON p."id" = i."productId"
+      JOIN "Warehouse" w ON w."id" = i."warehouseId"
+      WHERE TRUE ${productScope("p")}
+      ORDER BY p."sku", w."code"`;
+
+    const withHistory = rows.filter((row) => row.last_reserved !== null);
+
+    result.checked = withHistory.length;
+    withHistory
+      .filter((row) => row.last_reserved !== row.reservedQuantity)
+      .forEach((row) =>
+        result.errors.push(`${row.sku} @ ${row.warehouse}: reserved ${row.reservedQuantity} but last ledger reservedAfter ${row.last_reserved}`)
+      );
+
+    // a series without any ledger row is already reported by the first check
+    const legacy = rows.filter((row) => row.last_reserved === null && row.has_ledger).length;
+
+    if (legacy > 0) {
+      result.warnings.push(`${legacy} inventory rows have ledger rows but none with reservedAfter (written before P4)`);
+    }
+
     results.push(result);
   }
 

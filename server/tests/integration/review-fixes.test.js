@@ -1,6 +1,6 @@
-const request = require("supertest");
 
 const app = require("../../src/app");
+const { authed } = require("../helpers/http");
 const procurementService = require("../../src/services/procurement.service");
 const stockTransferService = require("../../src/services/stock-transfer.service");
 const { ConflictError } = require("../../src/errors/app-error");
@@ -9,7 +9,7 @@ const f = require("../helpers/factories");
 const { ledgerFor } = require("../helpers/ledger");
 const { settle, times } = require("../helpers/concurrency");
 
-const api = () => request(app);
+const api = () => authed(app);
 
 beforeEach(resetDatabase);
 afterAll(disconnect);

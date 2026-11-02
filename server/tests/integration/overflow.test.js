@@ -1,6 +1,6 @@
-const request = require("supertest");
 
 const app = require("../../src/app");
+const { authed } = require("../helpers/http");
 const { prisma, resetDatabase, disconnect } = require("../helpers/db");
 const f = require("../helpers/factories");
 
@@ -11,7 +11,7 @@ describe("values that fit the input bounds but overflow the column types", () =>
   it("receiving stock past the Int range is a 400, not a 500, and changes nothing", async () => {
     const s = await f.stockScenario({ quantity: 2_100_000_000 });
 
-    const res = await request(app)
+    const res = await authed(app)
       .post("/api/v1/inventory/receive")
       .send({ productId: s.product.id, warehouseId: s.warehouse.id, quantity: 100_000_000 });
 
@@ -28,7 +28,7 @@ describe("values that fit the input bounds but overflow the column types", () =>
     const product = await f.createProduct();
     const supplier = await f.createSupplier();
 
-    const res = await request(app)
+    const res = await authed(app)
       .post("/api/v1/procurement/purchase-orders")
       .send({
         supplierId: supplier.id,

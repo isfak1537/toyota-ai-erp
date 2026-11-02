@@ -1,3 +1,4 @@
+const { ConflictError, NotFoundError, ValidationError } = require("../errors/app-error");
 const prisma = require("../config/prisma");
 
 const supplierProductRepository = require(
@@ -18,17 +19,13 @@ const createSupplierProduct = async (data) => {
   );
 
   if (!supplier) {
-    const error = new Error("Supplier not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Supplier not found");
   }
 
   if (!supplier.isActive) {
-    const error = new Error(
+    throw new ValidationError(
       "Cannot link an inactive supplier"
     );
-    error.statusCode = 400;
-    throw error;
   }
 
   const product = await productRepository.getProductById(
@@ -36,17 +33,13 @@ const createSupplierProduct = async (data) => {
   );
 
   if (!product) {
-    const error = new Error("Product not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Product not found");
   }
 
   if (!product.isActive) {
-    const error = new Error(
+    throw new ValidationError(
       "Cannot link an inactive product"
     );
-    error.statusCode = 400;
-    throw error;
   }
 
   const existing =
@@ -56,11 +49,9 @@ const createSupplierProduct = async (data) => {
     );
 
   if (existing) {
-    const error = new Error(
+    throw new ConflictError(
       "This supplier is already linked to this product"
     );
-    error.statusCode = 409;
-    throw error;
   }
 
   const result =
@@ -87,11 +78,9 @@ const getSupplierProductById = async (id) => {
     await supplierProductRepository.getSupplierProductById(id);
 
   if (!record) {
-    const error = new Error(
+    throw new NotFoundError(
       "Supplier-product relationship not found"
     );
-    error.statusCode = 404;
-    throw error;
   }
 
   return record;

@@ -1,3 +1,4 @@
+const { NotFoundError, ValidationError } = require("../errors/app-error");
 const warehouseRepository = require("../repositories/warehouse.repository");
 const factoryRepository = require("../repositories/factory.repository");
 
@@ -5,25 +6,19 @@ const createWarehouse = async (data) => {
   const factory = await factoryRepository.getFactoryById(data.factoryId);
 
   if (!factory) {
-    const error = new Error("Factory not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Factory not found");
   }
 
   if (!factory.isActive) {
-    const error = new Error(
+    throw new ValidationError(
       "Cannot create warehouse under an inactive factory"
     );
-    error.statusCode = 400;
-    throw error;
   }
 
   if (!factory.company.isActive) {
-    const error = new Error(
+    throw new ValidationError(
       "Cannot create warehouse under an inactive company"
     );
-    error.statusCode = 400;
-    throw error;
   }
 
   return warehouseRepository.createWarehouse(data);
@@ -37,9 +32,7 @@ const getWarehouseById = async (id) => {
   const warehouse = await warehouseRepository.getWarehouseById(id);
 
   if (!warehouse) {
-    const error = new Error("Warehouse not found");
-    error.statusCode = 404;
-    throw error;
+    throw new NotFoundError("Warehouse not found");
   }
 
   return warehouse;
@@ -54,25 +47,19 @@ const updateWarehouse = async (id, data) => {
     );
 
     if (!factory) {
-      const error = new Error("Factory not found");
-      error.statusCode = 404;
-      throw error;
+      throw new NotFoundError("Factory not found");
     }
 
     if (!factory.isActive) {
-      const error = new Error(
+      throw new ValidationError(
         "Cannot assign warehouse to an inactive factory"
       );
-      error.statusCode = 400;
-      throw error;
     }
 
     if (!factory.company.isActive) {
-      const error = new Error(
+      throw new ValidationError(
         "Cannot assign warehouse to an inactive company"
       );
-      error.statusCode = 400;
-      throw error;
     }
   }
 

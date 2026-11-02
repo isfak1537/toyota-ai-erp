@@ -15,3 +15,13 @@ assertSafeTestDatabase({
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 process.env.NODE_ENV = "test";
+
+// A fixed value for tests only; real secrets come from the environment.
+process.env.JWT_SECRET = "test-only-jwt-secret-0123456789abcdef0123456789";
+
+// Tests never reach a real AI service or LLM, whatever the developer's .env says.
+process.env.AI_SERVICE_URL = "http://127.0.0.1:9";
+process.env.AI_SERVICE_SECRET = "test-only-ai-service-secret-0123456789";
+process.env.LLM_PROVIDER = "";
+process.env.GROQ_API_KEY = "";
+process.env.GEMINI_API_KEY = "";

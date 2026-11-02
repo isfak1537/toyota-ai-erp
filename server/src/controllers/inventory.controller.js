@@ -58,7 +58,7 @@ const deleteInventory = async (req, res) => {
 };
 
 const receiveStock = async (req, res) => {
-  const data = await inventoryService.receiveStock(req.body);
+  const data = await inventoryService.receiveStock({ ...req.body, actorId: req.user.id });
 
   res.status(201).json({
     success: true,
@@ -68,7 +68,7 @@ const receiveStock = async (req, res) => {
 };
 
 const issueStock = async (req, res) => {
-  const data = await inventoryService.issueStock(req.body);
+  const data = await inventoryService.issueStock({ ...req.body, actorId: req.user.id });
 
   res.status(201).json({
     success: true,
@@ -78,7 +78,7 @@ const issueStock = async (req, res) => {
 };
 
 const adjustStock = async (req, res) => {
-  const data = await inventoryService.adjustStock(req.body);
+  const data = await inventoryService.adjustStock({ ...req.body, actorId: req.user.id });
 
   res.status(201).json({
     success: true,
@@ -88,7 +88,7 @@ const adjustStock = async (req, res) => {
 };
 
 const reserveStock = async (req, res) => {
-  const data = await inventoryService.reserveStock(req.body);
+  const data = await inventoryService.reserveStock({ ...req.body, actorId: req.user.id });
 
   res.status(201).json({
     success: true,
@@ -98,7 +98,7 @@ const reserveStock = async (req, res) => {
 };
 
 const releaseStock = async (req, res) => {
-  const data = await inventoryService.releaseStock(req.body);
+  const data = await inventoryService.releaseStock({ ...req.body, actorId: req.user.id });
 
   res.status(201).json({
     success: true,
