@@ -15,6 +15,7 @@ const stockTransferRoutes = require("./routes/stock-transfer.routes");
 const procurementRoutes = require("./routes/procurement.routes");
 const salesOrderRoutes = require("./routes/sales-order.routes");
 const authRoutes = require("./routes/auth.routes");
+const aiRoutes = require("./routes/ai.routes");
 const { authenticate, requireRoleForWrites } = require("./middlewares/auth.middleware");
 const roles = require("./middlewares/roles");
 
@@ -44,6 +45,8 @@ protect("/api/v1/stock-transfers", stockTransferRoutes, roles.STOCK);
 protect("/api/v1/customers", customerRoutes, roles.MASTER_DATA);
 // procurement sets its own roles per route (requisitions, purchase orders, goods receipts, invoices)
 protect("/api/v1/procurement", procurementRoutes);
+// AI module: each route names its own roles
+protect("/api/v1/ai", aiRoutes);
 
 app.use((req, res, next) => {
   next(new NotFoundError("Route not found"));

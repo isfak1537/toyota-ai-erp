@@ -23,9 +23,12 @@ const MOUNTS = [
   ["/api/v1/stock-transfers", "../../src/routes/stock-transfer.routes", roles.STOCK],
   ["/api/v1/customers", "../../src/routes/customer.routes", roles.MASTER_DATA],
   ["/api/v1/procurement", "../../src/routes/procurement.routes", null],
+  ["/api/v1/ai", "../../src/routes/ai.routes", null],
 ];
 
-const PROCUREMENT_WRITES = {
+// routes that name their own roles (the router has no single write list)
+const PER_ROUTE_WRITES = {
+  "POST /replenishment/run": roles.PROCUREMENT,
   "POST /requisitions": roles.PROCUREMENT,
   "POST /requisitions/:id/submit": roles.PROCUREMENT,
   "POST /requisitions/:id/approve": roles.PROCUREMENT,
@@ -46,7 +49,7 @@ const declared = () =>
         Object.keys(layer.route.methods).map((method) => {
           const verb = method.toUpperCase();
           const write = verb !== "GET";
-          const allowed = !write ? null : writeRoles ?? PROCUREMENT_WRITES[`${verb} ${layer.route.path}`];
+          const allowed = !write ? null : writeRoles ?? PER_ROUTE_WRITES[`${verb} ${layer.route.path}`];
 
           return { verb, path: `${prefix}${layer.route.path === "/" ? "" : layer.route.path}`, allowed, key: `${verb} ${layer.route.path}` };
         })
