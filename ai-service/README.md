@@ -51,6 +51,25 @@ The service refuses to start without a secret of at least 16 characters.
 .venv/bin/pytest -m slow          # executes the notebooks
 ```
 
+## API (internal, ERP API only)
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | open; status, version, active model versions |
+| `POST /forecast` | `{series:[{productId,warehouseId}], horizonDays 1-30, asOf?}` -> baseline, ML and selected daily forecast with sigma, holdout MAEs, 90 days of history |
+| `POST /anomalies/score` | `{transactionIds}` or `{from,to}` (UTC, max 31 days) -> flags with score, source RULE/MODEL/BOTH, reason |
+| `POST /train` | `{models:["forecast","anomaly"], asOf?}` -> trains, evaluates, registers and activates new versions |
+
+Everything except `/health` returns 401 without the secret, including unknown paths; `/docs` and `/openapi.json` are off.
+
+## Results
+
+`REPORT.md` (generated) states the holdout and anomaly results honestly, including where the ML model and the
+Isolation Forest fall short. `notebooks/01_forecast_eval.ipynb` and `notebooks/02_anomaly_eval.ipynb` show the charts
+(history + baseline + ML forecast for the TREND_FAST and OVERSTOCKED demo products; detection per anomaly type).
+Test data are CSV fixtures exported from the seed (`npm run seed:export-fixtures` in `server/`); the models never see
+the anomaly labels.
+
 ## Time convention
 
 Timestamps in the database are UTC. Business time is Asia/Dhaka (UTC+6,
