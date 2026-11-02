@@ -279,3 +279,93 @@ def test_apply_rules_returns_only_flagged_rows_with_combined_reasons_and_the_hig
     assert flagged.iloc[0]["rule_codes"] == ["R1", "R3"]
     assert flagged.iloc[0]["rule_score"] == 0.9
     assert "; " in flagged.iloc[0]["rule_reason"]
+
+
+# ---- eligibility (decided from data fields) ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "kind, quantity, reference_id, eligible, documented",
+    [
+        ("ISSUE", -3, None, True, False),
+        ("ADJUSTMENT", -3, None, True, False),
+        ("TRANSFER_IN", 3, 5, True, False),  # a transfer document does not make it a procurement event
+        ("RECEIPT", 30, None, True, False),  # a manual receipt is exactly what should be reviewed
+        ("RECEIPT", 30, 7, False, True),  # linked to a goods receipt: opening stock, bulk purchase, replenishment
+        ("RESERVATION", 0, None, False, False),  # does not move stock
+        ("RELEASE", 0, None, False, False),
+    ],
+)
+def test_only_stock_movements_that_are_not_document_linked_receipts_are_eligible(kind, quantity, reference_id, eligible, documented):
+    row = feature_row([(1, 1, 1, kind, quantity, 100, reference_id, "2026-10-01 04:00")])
+
+    assert bool(row["eligible"]) is eligible and bool(row["documented_receipt"]) is documented
+
+
+# ---- R5: duplicate movements ----------------------------------------------------------------------------------------------
+
+
+def duplicate_pair(second_time="2026-10-01 04:10:00", kind="ISSUE", quantity2=-4, product2=1, kind2=None, reference_id=None):
+    sign = -1 if kind == "ISSUE" else 1
+    return [
+        (1, 1, 1, kind, sign * 4, 96, reference_id, "2026-10-01 04:00:00"),
+        (2, product2, 1, kind2 or kind, quantity2 if kind == "ISSUE" else 4, 92, reference_id, second_time),
+    ]
+
+
+def r5(rows):
+    feats = compute_features(ledger(rows), stats_for(), 6).set_index("id")
+
+    return {row_id: "R5" in [hit.code for hit in rule_hits(row)] for row_id, row in feats.iterrows()}
+
+
+def test_r5_flags_the_second_of_two_identical_movements_within_ten_minutes():
+    assert r5(duplicate_pair("2026-10-01 04:03:00")) == {1: False, 2: True}  # only the repeat, never the original
+
+
+@pytest.mark.parametrize(
+    "second_time, expected",
+    [
+        ("2026-10-01 04:10:00", True),  # exactly 10 minutes: inside the window
+        ("2026-10-01 04:10:01", False),  # one second later: outside
+        ("2026-10-01 04:00:30", True),
+    ],
+)
+def test_r5_window_boundary(second_time, expected):
+    assert r5(duplicate_pair(second_time))[2] is expected
+
+
+def test_r5_needs_the_same_product_type_and_quantity():
+    assert r5(duplicate_pair("2026-10-01 04:03:00", quantity2=-5))[2] is False  # different quantity
+    assert r5(duplicate_pair("2026-10-01 04:03:00", product2=2))[2] is False  # different product
+    assert r5(duplicate_pair("2026-10-01 04:03:00", kind2="ADJUSTMENT", quantity2=-4))[2] is False  # different type
+
+
+def test_r5_ignores_document_linked_receipts_and_movements_that_do_not_change_stock():
+    receipts = [
+        (1, 1, 1, "RECEIPT", 30, 30, 7, "2026-10-01 04:00:00"),
+        (2, 1, 1, "RECEIPT", 30, 60, 8, "2026-10-01 04:02:00"),  # two real deliveries in a row
+    ]
+    reservations = [
+        (1, 1, 1, "RESERVATION", 0, 50, None, "2026-10-01 04:00:00"),
+        (2, 1, 1, "RESERVATION", 0, 50, None, "2026-10-01 04:02:00"),
+    ]
+
+    assert r5(receipts)[2] is False and r5(reservations)[2] is False
+
+
+def test_r5_still_catches_a_repeated_manual_receipt():
+    manual = [
+        (1, 1, 1, "RECEIPT", 12, 12, None, "2026-10-01 04:00:00"),
+        (2, 1, 1, "RECEIPT", 12, 24, None, "2026-10-01 04:04:00"),
+    ]
+
+    assert r5(manual)[2] is True
+
+
+def test_r5_explains_itself_with_the_gap():
+    feats = compute_features(ledger(duplicate_pair("2026-10-01 04:03:00")), stats_for(), 6).set_index("id")
+    reasons = {hit.code: hit.reason for hit in rule_hits(feats.loc[2])}
+
+    assert reasons["R5"] == "Identical issue of 4 units, 3 minutes after the previous one (window 10 minutes)"
+    assert feats.loc[2, "repeat_gap_min"] == 3.0 and np.isnan(feats.loc[1, "repeat_gap_min"])

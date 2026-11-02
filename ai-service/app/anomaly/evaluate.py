@@ -20,6 +20,8 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from app.anomaly.model import QUEUE_PERIOD, QUEUE_SIZE, assign_queue
+
 DETECTORS = {"rules": "rule_flag", "model": "model_flag", "combined": "flagged"}
 TOP_K = (10, 20, 50)
 
@@ -85,7 +87,7 @@ def evaluate_anomaly_detection(
             related_ids.add(_find(ledger, products, warehouses, label["related"]))
 
     frame = scored.set_index("id")
-    ranked = frame["model_score"].rank(method="min", ascending=False)
+    ranked = frame.loc[frame["eligible"], "risk_score"].rank(method="min", ascending=False)  # among the rows that can be queued
 
     rows = []
 
@@ -105,7 +107,7 @@ def evaluate_anomaly_detection(
                 "rules": bool(row["rule_flag"]),
                 "model": bool(row["model_flag"]),
                 "combined": bool(row["flagged"]),
-                "model_score": float(row["model_score"]),
+                "risk_score": float(row["risk_score"]),
                 "model_rank": int(ranked.loc[row_id]),
                 "rule_codes": ",".join(row["rule_codes"]) if isinstance(row["rule_codes"], list) else "",
             }
@@ -151,11 +153,12 @@ def evaluate_anomaly_detection(
             false_positives = flagged_wrong
 
     # threshold-free quality of the model score; the 'related' originals are left out
-    keep = ~frame.index.isin(related_ids)
+    keep = ~frame.index.isin(related_ids) & frame["eligible"].to_numpy()  # only eligible rows can enter the queue
     truth = frame.index[keep].isin(list(target_ids.values())).astype(int)
-    score = frame.loc[keep, "model_score"].to_numpy()
+    score = frame.loc[keep, "risk_score"].to_numpy()
     order = np.argsort(-score, kind="stable")
     ranking = {
+        "eligible_transactions": int(keep.sum()),
         "average_precision": float(average_precision_score(truth, score)),
         "roc_auc": float(roc_auc_score(truth, score)),
         "baseline_average_precision": float(truth.mean()),  # what a random ranking would score
@@ -224,3 +227,54 @@ ARTEFACT_MARKERS = ("synthetic demand shaping", "opening stock")
 
 def is_data_artefact(cause: str) -> bool:
     return any(marker in cause for marker in ARTEFACT_MARKERS)
+
+
+QUEUE_SIZES = (5, 10, 20)  # N per period; QUEUE_SIZE (10) was fixed up front, the others are a sensitivity check only
+
+
+def queue_metrics(
+    scored: pd.DataFrame,
+    labelled: pd.DataFrame,
+    related_ids: set[int],
+    tz_offset_hours: int = 6,
+    sizes: tuple[int, ...] = QUEUE_SIZES,
+    period: str = QUEUE_PERIOD,
+) -> pd.DataFrame:
+    """precision@N and recall@N of the weekly review queue, alone and together with the rules.
+
+    `scored` needs risk_score, eligible, rule_flag, created_at and id. A queue row that is the
+    related original of a labelled duplicate is neither a hit nor a false alarm.
+    """
+    truth = set(labelled["id"])
+    eligible = int(scored["eligible"].sum())
+    rows = []
+
+    for n in sizes:
+        queued = assign_queue(scored, n, period, tz_offset_hours)
+        in_queue = queued[queued["in_queue"]]
+        ignored = set(in_queue["id"]) & related_ids
+        hits = len(set(in_queue["id"]) & truth)
+        size = len(in_queue) - len(ignored)
+
+        both = queued[queued["in_queue"] | queued["rule_flag"]]
+        both_size = len(both) - len(set(both["id"]) & related_ids)
+        both_hits = len(set(both["id"]) & truth)
+
+        rows.append(
+            {
+                "n_per_period": n,
+                "chosen_up_front": n == QUEUE_SIZE,
+                "periods": int(queued["period"].nunique()),
+                "queue_rows": size,
+                "queue_hits": hits,
+                "precision_at_n": hits / size if size else float("nan"),
+                "recall_at_n": hits / len(truth),
+                "random_precision": len(truth) / eligible,
+                "queue_plus_rules_rows": both_size,
+                "queue_plus_rules_hits": both_hits,
+                "queue_plus_rules_precision": both_hits / both_size if both_size else float("nan"),
+                "queue_plus_rules_recall": both_hits / len(truth),
+            }
+        )
+
+    return pd.DataFrame(rows)

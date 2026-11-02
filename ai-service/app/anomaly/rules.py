@@ -5,9 +5,14 @@ R2  quantity far above normal      ISSUE, robust z above 6 and at least 5 units
 R3  outside business hours         any stock movement outside 08:00-17:00 local time
 R4  large manual receipt           RECEIPT without a document, at least 10 units and 5x the
                                    product's typical issue size
+R5  duplicate movement             the same product, warehouse, type and quantity as the movement
+                                   before it, within 10 minutes (REPEAT_WINDOW_MIN)
 
-Each rule gives a human-readable reason. Duplicates are deliberately NOT a rule:
-catching them is left to the model, so that evaluation can tell the two apart.
+Each rule gives a human-readable reason. R5 was added in the second pass; its window
+(10 minutes: a retried request or a double entry, not a second real order) was fixed
+before the pass looked at any result, and it ignores documented receipts and
+movements that do not change stock. R1 and R2 were NOT changed in that pass: their
+false positives are ordinary events that no data field tells apart from anomalies.
 """
 
 from __future__ import annotations
@@ -16,7 +21,7 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from app.anomaly.features import AFFECTS_ON_HAND, BUSINESS_END_MIN, BUSINESS_START_MIN
+from app.anomaly.features import AFFECTS_ON_HAND, BUSINESS_END_MIN, BUSINESS_START_MIN, REPEAT_WINDOW_MIN
 
 R1_MIN_UNITS = 5
 R1_MIN_SHARE = 0.20
@@ -25,7 +30,7 @@ R2_MIN_UNITS = 5
 R4_MIN_UNITS = 10
 R4_MIN_MULTIPLE = 5.0
 
-SEVERITY = {"R1": 0.9, "R2": 0.9, "R3": 0.7, "R4": 0.7}
+SEVERITY = {"R1": 0.9, "R2": 0.9, "R3": 0.7, "R4": 0.7, "R5": 0.6}
 
 
 @dataclass(frozen=True)
@@ -88,6 +93,16 @@ def rule_hits(row: pd.Series) -> list[RuleHit]:
                 f"Manual receipt of {int(row['abs_qty'])} units with no purchase order or goods receipt "
                 f"(typical issue is {row['issue_median']:g})",
                 SEVERITY["R4"],
+            )
+        )
+
+    if row["repeat_within_10min"] == 1.0 and row["eligible"] and row["abs_qty"] > 0:
+        hits.append(
+            RuleHit(
+                "R5",
+                f"Identical {kind.replace('_', ' ').lower()} of {int(row['abs_qty'])} units, "
+                f"{row['repeat_gap_min']:.0f} minutes after the previous one (window {REPEAT_WINDOW_MIN} minutes)",
+                SEVERITY["R5"],
             )
         )
 

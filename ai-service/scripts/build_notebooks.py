@@ -274,72 +274,108 @@ def anomaly_notebook():
             """
             # Anomaly detection evaluation (AI-008)
 
-            Four transparent **rules** and an **Isolation Forest** score every stock transaction. Eight anomalies were
-            injected into the synthetic ledger with ground-truth labels (`anomaly-labels.json`). The labels are used
-            **only here**: they never reach training, rule thresholds or the contamination rate (fixed at 0.5%
-            beforehand). Rules, model and the combination are reported separately.
+            Five transparent **rules** (R1-R5) and an **Isolation Forest risk score** with a weekly **review queue**
+            score every stock transaction. Eight anomalies were injected into the synthetic ledger with ground-truth
+            labels (`anomaly-labels.json`). The labels are used **only here**: they never reach training, rule thresholds,
+            the eligibility rule or the queue size. This is the second pass; the first-pass numbers (commit `5b78db1`)
+            are in `tests/fixtures/anomaly-baseline-v1.json` and are compared below.
 
             **Read this first.** The injected anomalies were designed with the same ideas the rules encode (outside
-            business hours, a big negative adjustment), so the rules catch them *by construction*. The model's
-            result is the informative part, and it is shown without flattering it.
+            business hours, a big negative adjustment, a duplicate), so the rules catch them *by construction*. The
+            queue's result is the informative part, and it is shown without flattering it.
             """
         ),
         code(SETUP),
         code(
             """
             import json
-            from app.anomaly.evaluate import evaluate_anomaly_detection, load_labels
-            from app.anomaly.model import fit_anomaly_model, score_ledger
+            from app.anomaly.evaluate import _find, evaluate_anomaly_detection, load_labels, queue_metrics
+            from app.anomaly.model import QUEUE_SIZE, fit_anomaly_model, score_ledger
             from app.data.sources import CsvSource
 
             source = CsvSource(FIXTURES)
             ledger, products, warehouses = source.ledger(), source.products(), source.warehouses()
             labels = load_labels(FIXTURES / "anomaly-labels.json")
             profiles = json.loads((FIXTURES / "scenarios.json").read_text())
+            before = json.loads((FIXTURES / "anomaly-baseline-v1.json").read_text())
 
             model = fit_anomaly_model(ledger)
             scored = score_ledger(model, ledger)
             evaluation = evaluate_anomaly_detection(scored, ledger, products, warehouses, labels)
-            print(f"{len(scored):,} transactions scored | {int(scored.flagged.sum())} flagged "
-                  f"(rules {int(scored.rule_flag.sum())}, model {int(scored.model_flag.sum())}, both {int((scored.source == 'BOTH').sum())}) | {len(evaluation.labelled)} injected anomalies")
+            related = {_find(ledger, products, warehouses, a["related"]) for a in labels["anomalies"] if a.get("related")}
+            print(f"{len(scored):,} transactions scored, {int(scored.eligible.sum()):,} eligible for the queue | {int(scored.flagged.sum())} flagged "
+                  f"(rules {int(scored.rule_flag.sum())}, queue {int(scored.model_flag.sum())}, both {int((scored.source == 'BOTH').sum())}) | {len(evaluation.labelled)} injected anomalies")
             """
         ),
-        md("## 1. Detection by anomaly type"),
-        code(
+        md(
             """
-            by_type = evaluation.by_type.set_index("anomaly_type")
-            table = pd.DataFrame({
-                "injected": by_type["injected"],
-                "rules": by_type["rules_detected"].astype(int).astype(str) + " / " + by_type["injected"].astype(str),
-                "model": by_type["model_detected"].astype(int).astype(str) + " / " + by_type["injected"].astype(str),
-                "combined": by_type["combined_detected"].astype(int).astype(str) + " / " + by_type["injected"].astype(str),
-            })
-            table.loc["ALL"] = [by_type["injected"].sum()] + [f"{int(by_type[c].sum())} / {int(by_type['injected'].sum())}" for c in ("rules_detected", "model_detected", "combined_detected")]
-            table
+            ## 1. Before and after
+
+            Changes in this pass, all decided before the results were seen: documented receipts and non-stock movements are
+            not eligible for the model; rule R5 flags an identical movement within 10 minutes; the forest's score is a risk
+            percentile and the top 10 eligible rows per local week form the review queue (no 0.5% cut).
             """
         ),
         code(
             """
             overall = evaluation.overall.set_index("detector")
-            overall = overall[["true_positives", "missed", "false_positives", "precision", "recall"]]
-            overall.round(3)
+            rows = []
+            for name in ("rules", "model", "combined"):
+                old, now = before["detectors"][name], overall.loc[name]
+                rows.append({"detector": name, "caught before": old["caught"], "caught after": int(now.true_positives),
+                             "false positives before": old["false_positives"], "false positives after": int(now.false_positives),
+                             "precision before": old["precision"], "precision after": now.precision,
+                             "recall before": old["recall"], "recall after": now.recall})
+            pd.DataFrame(rows).set_index("detector").round(3)
+            """
+        ),
+        code(
+            """
+            by_type = evaluation.by_type.set_index("anomaly_type")
+            old = before["by_type_detected_rules_model_combined"]
+            pd.DataFrame({
+                "injected": by_type["injected"],
+                "rules (before -> after)": [f"{old[t][0]} -> {int(by_type.loc[t, 'rules_detected'])}" for t in by_type.index],
+                "model (before -> after)": [f"{old[t][1]} -> {int(by_type.loc[t, 'model_detected'])}" for t in by_type.index],
+                "combined (before -> after)": [f"{old[t][2]} -> {int(by_type.loc[t, 'combined_detected'])}" for t in by_type.index],
+            })
             """
         ),
         code(
             """
             r = evaluation.ranking
-            print(f"Model score, threshold-free: ROC-AUC {r['roc_auc']:.3f}; average precision {r['average_precision']:.3f} "
-                  f"vs {r['baseline_average_precision']:.4f} for a random ranking ({r['average_precision'] / r['baseline_average_precision']:.0f}x).")
-            print("Labelled anomalies found among the model's top K:", {f"top {k}": f"{v} of {r['labelled']}" for k, v in r["recall_at_k"].items()})
-            flags = scored[scored["model_flag"]]
-            print(f"At the 0.5% operating point the model catches {int(evaluation.labelled['model'].sum())} of {len(evaluation.labelled)} injected anomalies; "
-                  f"its {len(flags)} flags are all {', '.join(sorted(flags['type'].unique()))} rows (large goods receipts, the opening stock).")
+            print(f"Risk score, threshold-free, over {r['eligible_transactions']:,} eligible rows: ROC-AUC {r['roc_auc']:.3f} (before {before['ranking']['roc_auc']}); "
+                  f"average precision {r['average_precision']:.3f} (before {before['ranking']['average_precision']}) vs {r['baseline_average_precision']:.4f} for a random ranking.")
+            print("Labelled anomalies among the top K risk scores:", {f"top {k}": f"{v} of {r['labelled']}" for k, v in r["recall_at_k"].items()},
+                  "| before:", before["ranking"]["recall_at_k"])
+            print("The new figures are over eligible rows only; the old ones over all rows, so they are not like for like.")
             """
         ),
-        md("## 2. Every injected anomaly"),
+        md(
+            """
+            ## 2. The review queue: precision@N and recall@N
+
+            N = 10 per local week was fixed before looking at results; 5 and 20 are a sensitivity check only. A queue row that is
+            the original of a labelled duplicate counts as neither a hit nor a false alarm.
+            """
+        ),
         code(
             """
-            evaluation.labelled[["label", "anomaly_type", "sku", "expected_detection", "rules", "model", "combined", "model_score", "model_rank", "rule_codes"]].round(3)
+            queue = queue_metrics(scored, evaluation.labelled, related)
+            queue.round(4)
+            """
+        ),
+        code(
+            """
+            top = scored[scored["in_queue"]].sort_values("risk_score", ascending=False).head(5)
+            top[["id", "type", "period", "risk_score", "queue_rank", "source", "top_features"]].assign(
+                top_features=lambda d: d["top_features"].map(lambda f: "; ".join(x["feature"] for x in f) if isinstance(f, list) else f))
+            """
+        ),
+        md("## 3. Every injected anomaly"),
+        code(
+            """
+            evaluation.labelled[["label", "anomaly_type", "sku", "expected_detection", "rules", "model", "combined", "risk_score", "model_rank", "rule_codes"]].round(3)
             """
         ),
         code(
@@ -347,12 +383,10 @@ def anomaly_notebook():
             from app.anomaly.features import compute_features
             feats = compute_features(ledger, model.stats, 6)
             raw = pd.Series(model.raw_scores(feats), index=feats["id"])          # Isolation Forest score: higher = more anomalous
-            threshold = np.quantile(model.train_scores, 1 - model.contamination)
             labelled = evaluation.labelled.set_index("id")
 
             fig, ax = plt.subplots(figsize=(10, 4.4))
             ax.hist(raw[~raw.index.isin(labelled.index)], bins=70, color="#9aa5b1", label=f"all other transactions ({len(raw) - len(labelled):,})")
-            ax.axvline(threshold, color=ML, ls="--", lw=1.6, label="model flag threshold (top 0.5%)")
             for row_id, row in labelled.iterrows():
                 ax.axvline(raw[row_id], ymax=0.55, color=SELECTED if row["rules"] else BASELINE, lw=2, alpha=0.9)
             ax.plot([], [], color=SELECTED, lw=2, label="injected anomaly, caught by a rule")
@@ -368,20 +402,18 @@ def anomaly_notebook():
             data = evaluation.labelled.sort_values("model_rank", ascending=False)
             colors = [SELECTED if r else BASELINE for r in data["rules"]]
             ax.barh(data["label"] + "  " + data["anomaly_type"].str.replace("_", " ").str.lower(), data["model_rank"], color=colors)
-            ax.axvline(int(len(scored) * 0.005), color=ML, ls="--", label="model flags only ranks 1-%d" % int(len(scored) * 0.005))
-            ax.set_xscale("log"); ax.set_xlabel(f"rank of the model score among {len(scored):,} transactions (1 = most anomalous)")
-            ax.set_title("Model rank of each injected anomaly (green = also caught by a rule)")
-            ax.legend(fontsize=8); plt.tight_layout(); plt.show()
+            ax.set_xscale("log"); ax.set_xlabel(f"rank of the risk score among {int(scored.eligible.sum()):,} eligible transactions (1 = riskiest)")
+            ax.set_title("Risk rank of each injected anomaly (green = also caught by a rule)")
+            plt.tight_layout(); plt.show()
             """
         ),
         md(
             """
-            ## 2b. Why the model misses the off-hours events
+            ### Why the model misses the off-hours events
 
-            An Isolation Forest isolates points by random splits on features. In the training data only a handful of
-            transactions are outside business hours, so in most trees' random samples that feature is constant and
-            cannot be split on: such events are not isolated quickly and look ordinary. The rule covers them directly,
-            which is the point of having both layers.
+            An Isolation Forest isolates points by random splits on features. Only a handful of transactions are outside
+            business hours, so in most trees' random samples that feature is constant and cannot be split on. The rule
+            covers them directly, which is the point of having both layers.
             """
         ),
         code(
@@ -390,46 +422,47 @@ def anomaly_notebook():
             injected = feats["id"].isin(evaluation.labelled["id"]).to_numpy()
             print(f"{int(off.sum())} of {len(feats):,} transactions are outside business hours ({100 * off.mean():.2f}%); "
                   f"{int((off & injected).sum())} of them are injected anomalies.")
-
-            # the hypothesis, checked: how many trees ever saw an off-hours row in their random sample?
             saw = np.mean([off[idx].any() for idx in model.forest.estimators_samples_])
             print(f"Only {100 * saw:.0f}% of the {len(model.forest.estimators_samples_)} trees had an off-hours transaction in their sample; "
                   f"in the other {100 * (1 - saw):.0f}% that feature is constant and cannot isolate anything.")
             """
         ),
-        md("## 3. False positives: what the combined detector flags that is not labelled"),
+        md("## 4. False positives: what is flagged that is not labelled"),
         code(
             """
             from app.anomaly.evaluate import categorize_false_positives, is_data_artefact
             steered = {sku for sku, p in profiles["profiles"].items() if p in profiles["steeredProfiles"]}
             fp = categorize_false_positives(evaluation.false_positives, ledger, labels, steered)
             summary = fp.groupby(["source", "type", "likely_cause"]).size().rename("flags").reset_index().sort_values("flags", ascending=False)
-            print(f"{len(fp)} false positives out of {int(scored.flagged.sum())} flags "
-                  f"-> precision {evaluation.overall.set_index('detector').loc['combined', 'precision']:.2f}")
+            print(f"{len(fp)} false positives out of {int(scored.flagged.sum())} flags (before: {before['detectors']['combined']['false_positives']} of {before['flags']['total']}) "
+                  f"-> precision {overall.loc['combined', 'precision']:.3f} (before {before['detectors']['combined']['precision']})")
             summary
             """
         ),
         code(
             """
+            before_fp = pd.Series(before["false_positive_causes"], name="flags before").rename_axis("source, type and cause")
             natural = fp[~fp["likely_cause"].map(is_data_artefact)]
-            print(f"Setting aside the flags caused by how the synthetic data was built ({len(fp) - len(natural)}), {len(natural)} flags remain:")
-            natural["likely_cause"].value_counts()
+            print(f"After setting aside flags caused by how the synthetic data was built ({len(fp) - len(natural)}), {len(natural)} remain.")
+            before_fp
             """
         ),
         md(
             """
-            ## 4. What this does and does not show
+            ## 5. What this does and does not show
 
-            * **Rules catch what they were written for.** Off-hours events, large negative adjustments and large manual
-              receipts are found because the injected anomalies match the rules, not because the system discovered anything.
-            * **The model adds little at its operating point on this data.** It ranks the labelled rows well above chance
-              (see ROC-AUC and average precision) but not into the top 0.5%, and its flags are dominated by large legitimate
-              receipts. Duplicates, which were deliberately left to it, are missed.
-            * **Rule R2 also fires on ordinary tail events.** Daily demand is Poisson-like, so now and then one issue holds a
-              whole busy day's units; a robust z-score on such skewed counts is not conservative. Thresholds were fixed
-              before looking at the labels and are not retuned here.
-            * **Eight labels** are far too few to tune anything, and tuning on them would only overfit.
-            * Real anomalies are rarer, subtler and unlabelled; precision on real data will differ.
+            * **Rules catch what they were written for.** The injected anomalies match the rules, so the system did not
+              discover them.
+            * **The recall gain is mostly the eligibility rule.** Excluding receipts that carry a PO or goods-receipt link
+              removes the large legitimate receipts and the opening stock from the model's competition. In a real plant it
+              also makes the model blind to a wrong receipt that has a document.
+            * **Precision fell and workload rose.** About 147 flags instead of 33, because a fixed-size weekly queue is
+              always full and R5 also fires on natural repeats. Eight anomalies in 90 days cannot show what a real queue yields.
+            * **Rule R2 also fires on ordinary tail events.** The 13 original rule false positives were examined by data
+              fields: none is documented or a receipt, 12 are issues of 1.2 to 3.2 times the mean daily demand. A days-of-demand
+              criterion would remove them but choosing it now would be tuning on seen labels; it is left to the owner.
+            * **N = 10, the 10-minute R5 window and the exclusion were fixed up front;** N = 5 and 20 are sensitivity only.
+            * **Eight labels** are far too few to tune anything. Real anomalies are rarer, subtler and unlabelled.
             """
         ),
     ]

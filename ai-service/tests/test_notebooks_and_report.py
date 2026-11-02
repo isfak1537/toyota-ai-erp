@@ -52,7 +52,9 @@ def test_the_report_is_exactly_what_the_script_generates_from_the_current_code()
 def test_the_report_states_the_unflattering_results():
     text = (ROOT / "REPORT.md").read_text()
 
-    assert "catches **0 of 8**" in text or "**0 of 8**" in text
+    assert "Precision and recall at N per week" in text and "chosen up front" in text and "sensitivity only" in text
+    assert "Most of the recall gain comes from excluding document-linked receipts" in text  # the caveat, not just the headline
+    assert "| Combined | 6 / 8 | 8 / 8 |" in text and "precision 0.05 is acceptable" in text
     assert "nested" in text and "synthetic" in text.lower()
     assert "What not to conclude" in text
 
@@ -72,3 +74,16 @@ def test_re_executing_the_notebooks_reproduces_the_committed_text_outputs(tmp_pa
 
     for name in NOTEBOOKS:
         assert text(tmp_path / name) == text(ROOT / "notebooks" / name), name
+
+
+def test_the_recorded_before_numbers_are_internally_consistent():
+    before = json.loads((ROOT / "tests" / "fixtures" / "anomaly-baseline-v1.json").read_text())
+    d = before["detectors"]
+
+    for detector in d.values():
+        assert detector["caught"] + detector["missed"] == before["labelled"]
+        assert detector["recall"] == pytest.approx(detector["caught"] / before["labelled"], abs=0.005)
+
+    assert d["rules"]["false_positives"] + d["model"]["false_positives"] == d["combined"]["false_positives"]
+    assert sum(before["false_positive_causes"].values()) == d["combined"]["false_positives"]
+    assert before["flags"]["rules"] + before["flags"]["model"] >= before["flags"]["total"]

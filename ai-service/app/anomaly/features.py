@@ -1,5 +1,12 @@
 """Per-transaction features for anomaly detection (AI-008).
 
+Eligibility (decided from data fields, never from labels): a receipt that is linked
+to a goods-receipt document (the opening stock, bulk purchases, ordinary
+replenishment) is a procurement-workflow event, and a reservation or release does
+not move stock. Neither takes part in the risk model or its review queue; the
+transparent rules still look at them where they apply.
+
+
 Everything is computed from the ledger columns the read-only role may see. Size
 is judged against what is normal FOR THAT PRODUCT AND MOVEMENT TYPE (robust
 median / MAD learnt at training time), timing against the business hours
@@ -121,8 +128,11 @@ def compute_features(ledger: pd.DataFrame, stats: ReferenceStats, tz_offset_hour
 
     same = df.groupby(SERIES + ["type", "quantity"])["created_at"].diff().dt.total_seconds() / 60.0
     df["repeat_within_10min"] = (same.notna() & (same <= REPEAT_WINDOW_MIN)).astype("float64")
+    df["repeat_gap_min"] = same.where(df["repeat_within_10min"] == 1.0)  # minutes since the identical movement before it
 
     df["manual_receipt_no_ref"] = ((df["type"] == "RECEIPT") & df["reference_id"].isna()).astype("float64")
+    df["documented_receipt"] = (df["type"] == "RECEIPT") & df["reference_id"].notna()
+    df["eligible"] = df["type"].isin(AFFECTS_ON_HAND) & ~df["documented_receipt"]
     df["log_abs_qty"] = np.log1p(df["abs_qty"])
 
     for name in TYPES:

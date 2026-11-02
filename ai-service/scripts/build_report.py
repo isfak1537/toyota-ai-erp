@@ -18,8 +18,8 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app.anomaly.evaluate import categorize_false_positives, evaluate_anomaly_detection, is_data_artefact, load_labels  # noqa: E402
-from app.anomaly.model import fit_anomaly_model, score_ledger  # noqa: E402
+from app.anomaly.evaluate import _find, categorize_false_positives, evaluate_anomaly_detection, is_data_artefact, load_labels, queue_metrics  # noqa: E402
+from app.anomaly.model import QUEUE_SIZE, fit_anomaly_model, score_ledger  # noqa: E402
 from app.data.series import daily_demand, series_map  # noqa: E402
 from app.data.sources import CsvSource  # noqa: E402
 from app.forecasting.evaluate import evaluate_forecasting  # noqa: E402
@@ -69,25 +69,49 @@ def build() -> str:
     overall_rows = [[label, f"{s[k].macro_mae:.3f}", f"{s[k].micro_mae:.3f}", f"{s[k].wape:.3f}", f"{s[k].bias:+.3f}"] for k, label in names]
 
     # ------------------------------------------------------------------- anomalies
+    before = json.loads((FIXTURES / "anomaly-baseline-v1.json").read_text())
     model = fit_anomaly_model(ledger)
     scored = score_ledger(model, ledger)
     ev = evaluate_anomaly_detection(scored, ledger, products, warehouses, labels)
     o = ev.overall.set_index("detector")
+    related = {_find(ledger, products, warehouses, a["related"]) for a in labels["anomalies"] if a.get("related")}
+    queue = queue_metrics(scored, ev.labelled, related)
+    chosen = queue[queue["chosen_up_front"]].iloc[0]
     fp = categorize_false_positives(ev.false_positives, ledger, labels, steered)
     artefacts = int(fp["likely_cause"].map(is_data_artefact).sum())
     r = ev.ranking
-    flags = scored[scored["model_flag"]]
-    type_rows = [
-        [t["anomaly_type"].replace("_", " ").title(), int(t["injected"]), f"{int(t['rules_detected'])} / {int(t['injected'])}",
-         f"{int(t['model_detected'])} / {int(t['injected'])}", f"{int(t['combined_detected'])} / {int(t['injected'])}"]
-        for _, t in ev.by_type.iterrows()
-    ]
+    flagged_now = int(scored["flagged"].sum())
+    r5_hits = int(scored["rule_codes"].map(lambda c: isinstance(c, (list, str)) and "R5" in c).sum())
+    eligible = int(scored["eligible"].sum())
     total = int(ev.by_type["injected"].sum())
-    type_rows.append(["**All**", total] + [f"**{int(ev.by_type[c].sum())} / {total}**" for c in ("rules_detected", "model_detected", "combined_detected")])
-    detector_rows = [[n.title(), int(o.loc[n, "true_positives"]), int(o.loc[n, "missed"]), int(o.loc[n, "false_positives"]),
-                      "n/a" if np.isnan(o.loc[n, "precision"]) else f"{o.loc[n, 'precision']:.2f}", f"{o.loc[n, 'recall']:.2f}"] for n in ("rules", "model", "combined")]
+    bd = before["detectors"]
+    na = lambda v: "n/a" if v is None or (isinstance(v, float) and np.isnan(v)) else f"{v:.3f}"
+    ba_rows = []
+
+    for name in ("rules", "model", "combined"):
+        old, now = bd[name], o.loc[name]
+        label = {"rules": "Rules", "model": "Model (before: 0.5% cut; after: weekly queue)", "combined": "Combined"}[name]
+        ba_rows.append([label, f"{old['caught']} / {total}", f"{int(now['true_positives'])} / {total}", old["false_positives"], int(now["false_positives"]),
+                        f"{old['precision']:.3f}", na(now["precision"]), f"{old['recall']:.2f}", f"{now['recall']:.2f}"])
+
+    ba_rows.append(["Flags raised", "", "", "", "", before["flags"]["total"], flagged_now, "", ""])
+    type_rows = []
+
+    for _, t in ev.by_type.iterrows():
+        old = before["by_type_detected_rules_model_combined"][t["anomaly_type"]]
+        n = int(t["injected"])
+        type_rows.append([t["anomaly_type"].replace("_", " ").title(), n, f"{old[0]} -> {int(t['rules_detected'])}", f"{old[1]} -> {int(t['model_detected'])}",
+                          f"{old[2]} -> {int(t['combined_detected'])}"])
+
+    type_rows.append(["**All**", total, f"{bd['rules']['caught']} -> {int(o.loc['rules', 'true_positives'])}", f"{bd['model']['caught']} -> {int(o.loc['model', 'true_positives'])}",
+                      f"{bd['combined']['caught']} -> {int(o.loc['combined', 'true_positives'])}"])
+    queue_rows = [[f"{int(q['n_per_period'])}" + (" (chosen up front)" if q["chosen_up_front"] else " (sensitivity only)"), int(q["queue_rows"]), int(q["queue_hits"]),
+                   f"{q['precision_at_n']:.3f}", f"{q['recall_at_n']:.2f}", f"{q['queue_plus_rules_rows']}", f"{q['queue_plus_rules_hits']}",
+                   f"{q['queue_plus_rules_precision']:.3f}", f"{q['queue_plus_rules_recall']:.2f}"] for _, q in queue.iterrows()]
     fp_rows = [[src, typ, cause, int(n)] for (src, typ, cause), n in fp.groupby(["source", "type", "likely_cause"]).size().sort_values(ascending=False).items()]
+    old_fp_rows = [[k, v] for k, v in before["false_positive_causes"].items()]
     missed = ev.labelled[~ev.labelled["combined"]]
+    model_missed = ev.labelled[~ev.labelled["id"].isin(scored.loc[scored["in_queue"], "id"])]
     versions = library_versions()
 
     return f"""# AI service: evaluation report
@@ -104,9 +128,9 @@ accuracy a real plant would see. Python {versions['python']}, pandas {versions['
   {pct(1 - policy / b)} lower holdout MAE than the 7/14-day moving average ({policy:.3f} vs {b:.3f} units/day) and is better on {wins} of {len(evaluated)} series.
 * **Why the policy replaced "lower holdout MAE per series".** That rule reports {sel:.3f}, but only because it picks each winner on the days it is scored on.
   Its nested (honest) estimate is {nested:.3f}, {'worse' if nested > policy else 'better'} than the policy ({policy:.3f}).
-* **Anomalies.** The four rules catch {int(o.loc['rules', 'true_positives'])} of {total} injected anomalies, by construction. The
-  Isolation Forest catches **{int(o.loc['model', 'true_positives'])} of {total}** at its 0.5% operating point, although it ranks them
-  far above chance (ROC-AUC {r['roc_auc']:.2f}). Combined precision is {o.loc['combined', 'precision']:.2f}: {int(o.loc['combined', 'false_positives'])} of {int(scored['flagged'].sum())} flags are not labelled anomalies.
+* **Anomalies (second pass).** Rules R1-R5 catch {int(o.loc['rules', 'true_positives'])} of {total} injected anomalies (before: {bd['rules']['caught']}), the weekly review queue of {QUEUE_SIZE} catches
+  {int(chosen['queue_hits'])} (before the Isolation Forest's 0.5% cut caught {bd['model']['caught']}), and together they catch {int(o.loc['combined', 'true_positives'])}. The price is workload: {flagged_now} flags instead of {before['flags']['total']},
+  combined precision {na(o.loc['combined', 'precision'])} instead of {bd['combined']['precision']:.3f}. Most of the recall gain comes from excluding document-linked receipts, which also makes the model blind to a wrong receipt that has a document.
 
 ## 1. Forecasting (AI-001..AI-003)
 
@@ -135,42 +159,75 @@ The policy's advantage is {pct(1 - sub_m / sub_b)} without the steered series, a
 
 ## 2. Anomaly detection (AI-008)
 
-Eight anomalies were injected with ground-truth labels. The labels are used **only** for this evaluation, never for training, rule thresholds or the
-contamination rate (0.5%, fixed beforehand). {len(scored):,} transactions were scored.
+Eight anomalies were injected with ground-truth labels. The labels are used **only** for this evaluation, never for training, rule thresholds, the exclusion or the queue size.
+{len(scored):,} transactions were scored, {eligible:,} of them eligible for the review queue.
+
+**What changed in this pass** (decided before the results were seen, nothing tuned afterwards):
+
+1. **Eligibility.** Movements that are not on-hand changes (reservations, releases) and receipts that carry a document link (a PO or goods receipt) are scored but never enter the model's training or the queue. Chosen from data fields, not labels.
+2. **R5, duplicate movement:** the same product, warehouse, type and quantity {10} minutes or less after the previous one. The window was fixed in advance.
+3. **Risk score and review queue.** The Isolation Forest is no longer cut at a 0.5% contamination rate. Its score becomes a risk percentile among eligible training rows, and the top {QUEUE_SIZE} eligible rows per local week form the review queue,
+   each with its score and its top three contributing features (found by replacing one feature at a time with its typical value).
+4. R1 and R2 are unchanged. The analysis of their false positives is below.
+
+### Before and after
+
+{table(["Detector", "Caught before", "Caught after", "FP before", "FP after", "Precision before", "Precision after", "Recall before", "Recall after"], ba_rows)}
+
+Detection by anomaly type (before -> after):
 
 {table(["Anomaly type", "Injected", "Rules", "Model", "Combined"], type_rows)}
 
-{table(["Detector", "Caught", "Missed", "False positives", "Precision", "Recall"], detector_rows)}
+Threshold-free ranking of the risk score: ROC-AUC {before['ranking']['roc_auc']:.2f} -> {r['roc_auc']:.2f}, average precision {before['ranking']['average_precision']:.3f} -> {r['average_precision']:.3f}
+(random {r['baseline_average_precision']:.4f}); labelled anomalies in the top 10 / 20 / 50: {before['ranking']['recall_at_k']['10']} / {before['ranking']['recall_at_k']['20']} / {before['ranking']['recall_at_k']['50']} -> {r['recall_at_k']['10']} / {r['recall_at_k']['20']} / {r['recall_at_k']['50']}.
+The new figures are over the {r['eligible_transactions']:,} eligible rows, the old ones over all rows, so the two are not like for like.
 
-* **Rules catch what they were written for.** The injected anomalies were designed with the same ideas the rules encode (outside business hours, a large negative
-  adjustment, a large manual receipt), so rule recall here is a construction check, not a discovery.
-* **The model finds none of them at its operating point.** Its {len(flags)} flags are all {', '.join(sorted(flags['type'].unique()))} rows. Threshold-free it does rank
-  the labelled rows well above chance: ROC-AUC {r['roc_auc']:.2f}, average precision {r['average_precision']:.3f} against {r['baseline_average_precision']:.4f} for a random ranking
-  ({r['average_precision'] / r['baseline_average_precision']:.0f}x); {r['recall_at_k']['50']} of {r['labelled']} are in its top 50.
-* **Missed by everything:** {', '.join(f"{row['label']} ({row['anomaly_type'].replace('_', ' ').lower()})" for _, row in missed.iterrows())}.
-* **Why the model misses the off-hours events.** Only 2 of {len(scored):,} transactions are outside business hours; in most trees' random subsamples that feature is constant, so it cannot isolate them
-  (see the notebook for the measured share of trees).
+### Precision and recall at N per week
 
-**False positives ({len(fp)} of {int(scored['flagged'].sum())} flags), by likely cause:**
+N = {QUEUE_SIZE} was fixed before looking at results. N = 5 and 20 are shown only to see how sensitive the result is. A queue row that is the original of a labelled duplicate counts as neither a hit nor a false alarm.
+
+{table(["N per week", "Queue rows", "Hits", "Precision@N", "Recall@N", "Queue + rules rows", "Hits", "Precision", "Recall"], queue_rows)}
+
+A random queue of the same size would have precision {chosen['random_precision']:.4f}, so the queue is about {chosen['precision_at_n'] / chosen['random_precision']:.0f}x better than chance. Precision@N is low because the queue is a fixed size:
+with eight anomalies in 90 days, most weeks have none, and the queue is full anyway.
+
+* **Rules catch what they were written for.** The injected anomalies were designed with the same ideas the rules encode, so rule recall is a construction check, not a discovery.
+* **Missed by the queue:** {', '.join(f"{row['label']} ({row['anomaly_type'].replace('_', ' ').lower()}, rank {int(row['model_rank'])})" for _, row in model_missed.iterrows())}. Off-hours events are too rare for a forest to learn
+  from (see the notebook); the rules catch them.
+* **Missed by everything:** {', '.join(f"{row['label']} ({row['anomaly_type'].replace('_', ' ').lower()})" for _, row in missed.iterrows()) or 'nothing'}.
+* **R5 is noisy.** It fires on {r5_hits} rows, because identical repeated issues are common in small-count demand. One is the labelled duplicate.
+
+### False positives by cause
+
+Before (13 rule + 14 model false positives, commit {before['commit']}):
+
+{table(["Source, type and cause", "Flags"], old_fp_rows)}
+
+All 13 rule false positives were examined by data fields. None has a document link and none is a receipt. 12 are R2 hits on issues of 1.2 to 3.2 times the product's mean daily demand (natural tails of the demand
+distribution, two of them the generator's last-day trim), and 1 is an R1 hit on a routine cycle-count adjustment. No data field separates them from a true anomaly, so R1 and R2 were left alone.
+A criterion in days of demand would remove most of them, but choosing it now would be tuning on the labels I have seen; it is an owner decision (section 4).
+
+After ({len(fp)} false positives of {flagged_now} flags):
 
 {table(["Source", "Type", "Likely cause", "Flags"], fp_rows)}
 
-{artefacts} of the {len(fp)} are artefacts of how the synthetic data was built (opening stock, the generator's last-day trims, steered products); {len(fp) - artefacts} remain on ordinary data:
-large legitimate goods receipts that the model finds unusual, and ordinary tail events that rule R2 flags. R2's robust z-score is not conservative for Poisson-like counts.
+{artefacts} of the {len(fp)} are artefacts of how the synthetic data was built (the generator's last-day trims, steered products); {len(fp) - artefacts} are on ordinary data.
 
 ## 3. What not to conclude
 
-* Not that ML forecasting is {pct(1 - policy / b)} better for a real plant, or that the Isolation Forest does not work: it was given 8 synthetic anomalies, 6 of which the rules already cover.
+* Not that ML forecasting is {pct(1 - policy / b)} better for a real plant, or that the Isolation Forest does not work: it was given 8 synthetic anomalies, most of which the rules already cover.
 * Not that the old per-series figure ({sel:.3f}) was ever the expected accuracy of a selection rule; only the nested estimate ({nested:.3f}) is.
-* Not that rule or model thresholds are good: they were deliberately not tuned on 8 labels.
+* Not that rule or model thresholds are good: they were deliberately not tuned on 8 labels. The queue size, the R5 window and the eligibility exclusion were fixed before the results; N = 5 and 20 are a sensitivity check.
+* Not that precision 0.05 is acceptable: it is the cost of a fixed-size queue plus R5 on data with 8 anomalies in 90 days.
 * Demand is observed issues; stock-outs hide demand (censoring). The synthetic data has very few; real data may not.
 * No outlier cleaning was applied: the injected anomalies remain in the training series (their effect is small but not zero).
 
 ## 4. Options for the owner (not implemented)
 
 1. **AI-003 is decided** (see SRS): ML from 28 days of history, the baseline before. A margin rule ("baseline only if it wins by X") would need more than 14 days of evidence per series.
-2. **Receipts as model noise.** Large goods receipts and the opening stock dominate the model's flags; scoring receipts separately, or excluding the opening balance, would reduce them.
-3. **A duplicate rule** (identical movement within minutes) and a Poisson-aware size threshold for R2 would address the two clearest misses/false alarms. They were left out so the model could be evaluated on duplicates.
+2. **Blind spot of the eligibility rule.** Receipts that carry a PO or goods-receipt link are never scored by the model. A wrong receipt that has a document (wrong quantity, wrong supplier price) would pass. Cross-checking them
+   against the order quantity is a separate rule, not a statistical one.
+3. **Days-of-demand criterion for R2.** Twelve of the 13 original rule false positives were issues of 1.2 to 3.2 times the mean daily demand. Requiring, say, more than N days of demand would remove them. I did not choose N, because I have seen the labels.
 4. **Rare signals need a rule.** Off-hours activity is too rare in the data for a forest to learn from (the feature is already continuous); keep the rule, and consider a supervised component once real labels exist.
 
 ## Reproduce

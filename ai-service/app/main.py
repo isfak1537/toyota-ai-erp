@@ -102,7 +102,7 @@ def create_app(
         created_from, created_to = body.range_utc()
 
         try:
-            return anomalies().score(body.transactionIds, created_from, created_to, body.includeAll)
+            return anomalies().score(body.transactionIds, created_from, created_to, body.includeAll, body.queueSize, body.queuePeriod)
         except ServiceError as error:
             raise as_http(error) from error
 

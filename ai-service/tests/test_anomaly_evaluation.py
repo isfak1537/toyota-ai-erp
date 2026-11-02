@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 from sklearn.metrics import average_precision_score, roc_auc_score
 
-from app.anomaly.evaluate import _find, evaluate_anomaly_detection, load_labels
+from app.anomaly.evaluate import _find, evaluate_anomaly_detection, load_labels, queue_metrics
 from app.anomaly.model import fit_anomaly_model, score_ledger
 from app.data.sources import CsvSource
 from tests.conftest import FIXTURES
@@ -60,8 +60,9 @@ def small_world():
             "rule_flag": [i in (2, 9) for i in range(1, 11)],
             # the model fires on 5 (a label), 7 (the related original: ignored) and 10 (not a label)
             "model_flag": [i in (5, 7, 10) for i in range(1, 11)],
-            "model_score": [0.10, 0.99, 0.20, 0.30, 0.98, 0.40, 0.97, 0.50, 0.96, 0.95],
+            "risk_score": [0.10, 0.99, 0.20, 0.30, 0.98, 0.40, 0.97, 0.50, 0.96, 0.95],
             "rule_codes": [["R1"] if i in (2, 9) else float("nan") for i in range(1, 11)],
+            "eligible": True,
         }
     )
     scored["flagged"] = scored["rule_flag"] | scored["model_flag"]
@@ -104,11 +105,12 @@ def test_ranking_numbers_ignore_the_related_original_and_agree_with_sklearn():
 
     kept = scored[scored["id"] != 7]
     truth = kept["id"].isin([2, 5, 8]).astype(int)
-    assert ev.ranking["average_precision"] == pytest.approx(average_precision_score(truth, kept["model_score"]))
-    assert ev.ranking["roc_auc"] == pytest.approx(roc_auc_score(truth, kept["model_score"]))
+    assert ev.ranking["average_precision"] == pytest.approx(average_precision_score(truth, kept["risk_score"]))
+    assert ev.ranking["roc_auc"] == pytest.approx(roc_auc_score(truth, kept["risk_score"]))
     assert ev.ranking["baseline_average_precision"] == pytest.approx(3 / 9)
     # by score the order is 2, 5, 9, 10, 8..., so the top 2 hold two labels and the top 4 still two
     assert ev.ranking["recall_at_k"] == {"10": 3, "20": 3, "50": 3}
+    assert ev.ranking["eligible_transactions"] == 9
 
 
 def test_model_ranks_are_one_for_the_most_anomalous_row():
@@ -117,6 +119,17 @@ def test_model_ranks_are_one_for_the_most_anomalous_row():
     labelled = evaluate_anomaly_detection(scored, ledger, products, warehouses, labels).labelled.set_index("label")
 
     assert labelled.loc["A1", "model_rank"] == 1 and labelled.loc["A2", "model_rank"] == 2
+
+
+def test_only_eligible_rows_count_in_the_ranking_and_the_ranks():
+    scored, ledger, products, warehouses, labels = small_world()
+    scored.loc[scored["id"] == 9, "eligible"] = False  # a row that can never be queued, whatever its score
+
+    ev = evaluate_anomaly_detection(scored, ledger, products, warehouses, labels)
+
+    assert ev.ranking["eligible_transactions"] == 8
+    labelled = ev.labelled.set_index("label")
+    assert labelled.loc["A1", "model_rank"] == 1 and labelled.loc["A2", "model_rank"] == 2  # ranks among eligible rows only
 
 
 def test_a_label_that_matches_no_ledger_row_is_an_error():
@@ -169,7 +182,7 @@ def test_the_related_original_of_the_duplicate_is_never_counted_as_a_false_posit
     assert not set(ev.labelled["id"]) & set(ev.false_positives["id"])
 
 
-def test_the_model_score_ranks_labelled_rows_far_better_than_chance(real):
+def test_the_risk_score_ranks_labelled_rows_far_better_than_chance(real):
     _, _, _, _, ev = real
 
     assert ev.ranking["roc_auc"] > 0.75
@@ -182,7 +195,7 @@ def test_the_labels_play_no_part_in_what_was_scored(real):
     _, ledger, scored, _, _ = real
     other = score_ledger(fit_anomaly_model(ledger), ledger)  # a second fit that never touched the labels
 
-    pd.testing.assert_series_equal(scored["model_score"], other["model_score"])
+    pd.testing.assert_series_equal(scored["risk_score"], other["risk_score"])
 
 
 def test_the_summary_dict_is_json_ready(real):
@@ -234,3 +247,81 @@ def test_categorizing_nothing_gives_an_empty_frame_with_the_column():
     out = categorize_false_positives(pd.DataFrame(columns=["type", "sku", "created_at"]), pd.DataFrame({"created_at": pd.to_datetime(["2026-08-04"])}), {"endDate": "2026-11-01"}, set())
 
     assert out.empty and "likely_cause" in out.columns
+
+
+# ---- precision@N and recall@N of the review queue, counted by hand ------------------------------------------------------------
+
+
+def queue_world():
+    """Twelve eligible rows in one local week; risk falls with the id (1 is the riskiest)."""
+    scored = pd.DataFrame(
+        {
+            "id": range(1, 13),
+            "risk_score": [round(0.99 - 0.05 * i, 2) for i in range(12)],
+            "eligible": True,
+            "created_at": pd.date_range("2026-10-05 04:00", periods=12, freq="h"),  # all in the week 2026-10-04/2026-10-10
+            "rule_flag": [i in (11, 12) for i in range(1, 13)],  # the rules catch rows 11 and 12 only
+        }
+    )
+    labelled = pd.DataFrame({"id": [1, 3, 12]})  # three labelled anomalies: ranks 1, 3 and 12 by risk
+
+    return scored, labelled
+
+
+def test_precision_and_recall_at_n_match_a_hand_count():
+    scored, labelled = queue_world()
+
+    out = queue_metrics(scored, labelled, related_ids=set(), sizes=(2, 4, 6)).set_index("n_per_period")
+
+    # N=2 queues rows 1, 2 -> one hit (row 1)
+    assert out.loc[2, ["queue_rows", "queue_hits"]].tolist() == [2, 1]
+    assert out.loc[2, "precision_at_n"] == pytest.approx(1 / 2) and out.loc[2, "recall_at_n"] == pytest.approx(1 / 3)
+    # N=4 queues rows 1-4 -> hits are rows 1 and 3
+    assert out.loc[4, "queue_hits"] == 2 and out.loc[4, "precision_at_n"] == pytest.approx(2 / 4)
+    assert out.loc[4, "recall_at_n"] == pytest.approx(2 / 3)
+    # N=6 adds rows 5, 6 -> no new hit
+    assert out.loc[6, "queue_hits"] == 2 and out.loc[6, "precision_at_n"] == pytest.approx(2 / 6)
+    assert out["random_precision"].tolist() == pytest.approx([3 / 12] * 3)
+    assert out["periods"].tolist() == [1, 1, 1]
+
+
+def test_the_rules_extend_the_queue_without_double_counting():
+    scored, labelled = queue_world()
+
+    out = queue_metrics(scored, labelled, related_ids=set(), sizes=(2,)).iloc[0]
+
+    # queue {1, 2} plus rule hits {11, 12} -> four rows, hits are 1 and 12
+    assert out["queue_plus_rules_rows"] == 4 and out["queue_plus_rules_hits"] == 2
+    assert out["queue_plus_rules_precision"] == pytest.approx(2 / 4) and out["queue_plus_rules_recall"] == pytest.approx(2 / 3)
+
+
+def test_a_queued_related_original_is_neither_a_hit_nor_a_false_alarm():
+    scored, labelled = queue_world()
+
+    out = queue_metrics(scored, labelled, related_ids={2}, sizes=(2,)).iloc[0]  # row 2 is the original of a duplicate
+
+    assert out["queue_rows"] == 1 and out["queue_hits"] == 1
+    assert out["precision_at_n"] == pytest.approx(1 / 1)
+
+
+def test_the_queue_is_cut_per_period_so_n_applies_to_every_week():
+    scored, labelled = queue_world()
+    later = scored.copy()
+    later["id"] += 100
+    later["created_at"] += pd.Timedelta(days=7)  # the same twelve rows, one week later
+    both = pd.concat([scored, later], ignore_index=True)
+
+    out = queue_metrics(both, labelled, related_ids=set(), sizes=(2,)).iloc[0]
+
+    assert out["periods"] == 2 and out["queue_rows"] == 4 and out["queue_hits"] == 1  # 2 per week; only week one has a labelled row
+
+
+def test_only_eligible_rows_can_be_queued_in_the_metrics():
+    scored, labelled = queue_world()
+    scored.loc[scored["id"] == 1, "eligible"] = False
+
+    out = queue_metrics(scored, labelled, related_ids=set(), sizes=(2,)).iloc[0]
+
+    # row 1 can no longer be queued: the queue is now rows 2 and 3, so only row 3 is a hit and row 1 is lost for good
+    assert out["queue_rows"] == 2 and out["queue_hits"] == 1 and out["recall_at_n"] == pytest.approx(1 / 3)
+    assert out["random_precision"] == pytest.approx(3 / 11)  # the baseline is over the 11 rows that CAN be queued

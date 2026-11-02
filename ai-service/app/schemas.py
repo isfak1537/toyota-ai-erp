@@ -48,6 +48,10 @@ class AnomalyScoreRequest(BaseModel):
     date_from: dt.datetime | None = Field(default=None, alias="from")
     date_to: dt.datetime | None = Field(default=None, alias="to")
     includeAll: bool = False
+    # the review queue: the `queueSize` riskiest eligible transactions of each `queuePeriod` among the
+    # requested ones (0 turns the queue off and returns rule hits only)
+    queueSize: int = Field(default=10, ge=0, le=100)
+    queuePeriod: Literal["week", "day"] = "week"
 
     @model_validator(mode="after")
     def exactly_one_selection(self):
