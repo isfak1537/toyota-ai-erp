@@ -22,6 +22,7 @@ const createRequisitionSchema = z
   .strictObject({
     requesterName: text("requesterName", 120).min(1, "requesterName is required"),
     supplierId: optionalId("supplierId"),
+    destinationWarehouseId: optionalId("destinationWarehouseId"),
     notes: optionalText("notes"),
     items: itemsOf(
       {
@@ -40,6 +41,7 @@ const createPurchaseOrderSchema = z
   .strictObject({
     supplierId: positiveInt("supplierId"),
     requisitionId: optionalId("requisitionId"),
+    destinationWarehouseId: optionalId("destinationWarehouseId"),
     expectedDate: optionalDate("expectedDate"),
     notes: optionalText("notes"),
     taxAmount: optionalMoney("taxAmount"),
@@ -59,7 +61,10 @@ const createPurchaseOrderSchema = z
 const createGoodsReceiptSchema = z
   .strictObject({
     purchaseOrderId: positiveInt("purchaseOrderId"),
-    warehouseId: positiveInt("warehouseId"),
+    // optional when the purchase order has a destination warehouse (it is then the default)
+    warehouseId: optionalId("warehouseId"),
+    // receive somewhere other than the PO's destination (ADMIN, WAREHOUSE_MANAGER; audited)
+    allowDifferentWarehouse: z.boolean({ error: "allowDifferentWarehouse must be true or false" }).optional(),
     notes: optionalText("notes"),
     items: itemsOf(
       {

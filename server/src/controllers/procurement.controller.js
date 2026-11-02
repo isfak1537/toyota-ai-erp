@@ -74,7 +74,7 @@ const approvePurchaseOrder = async (req, res) => {
 };
 
 const createGoodsReceipt = async (req, res) => {
-  const data = await procurementService.createGoodsReceipt(req.body, req.user.id);
+  const data = await procurementService.createGoodsReceipt(req.body, req.user);
 
   return res.status(201).json({
     success: true,

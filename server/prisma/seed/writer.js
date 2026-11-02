@@ -218,6 +218,7 @@ const writeDataset = async (prisma, dataset) => {
           data: dataset.purchaseOrders.map((po) => ({
             poNumber: po.number,
             supplierId: suppliers.get(po.supplierCode).id,
+            destinationWarehouseId: warehouses.get(po.receivingWarehouseCode).id,
             status: po.status,
             orderDate: new Date(po.createdAt),
             expectedDate: new Date(po.expectedAt),

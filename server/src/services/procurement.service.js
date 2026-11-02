@@ -10,9 +10,27 @@ const {
 } = require("../utils/money");
 const {
   ConflictError,
+  ForbiddenError,
   NotFoundError,
   ValidationError,
 } = require("../errors/app-error");
+const { writeAudit } = require("./audit.service");
+
+// Roles that may receive goods somewhere other than the purchase order's destination.
+const WAREHOUSE_OVERRIDE_ROLES = ["ADMIN", "WAREHOUSE_MANAGER"];
+
+const activeWarehouseOrThrow = async (client, id) => {
+  const warehouse = await client.warehouse.findFirst({ where: { id, isActive: true } });
+
+  if (!warehouse) {
+    throw new NotFoundError("Active warehouse not found");
+  }
+
+  return warehouse;
+};
+
+const optionalDestination = (value) =>
+  value === undefined || value === null || value === "" ? null : toId(value, "destinationWarehouseId");
 
 const makeNumber = (prefix) => {
   return `${prefix}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
@@ -49,6 +67,7 @@ const createRequisition = async (data, actorId) => {
   const {
     requesterName,
     supplierId,
+    destinationWarehouseId,
     notes,
     items,
   } = data;
@@ -79,6 +98,12 @@ const createRequisition = async (data, actorId) => {
     if (!supplier) {
       throw new NotFoundError("Active supplier not found");
     }
+  }
+
+  const parsedDestination = optionalDestination(destinationWarehouseId);
+
+  if (parsedDestination) {
+    await activeWarehouseOrThrow(prisma, parsedDestination);
   }
 
   const productIds = new Set();
@@ -131,6 +156,7 @@ const createRequisition = async (data, actorId) => {
       createdById: actorId ?? null,
       requesterName: requesterName.trim(),
       supplierId: parsedSupplierId,
+      destinationWarehouseId: parsedDestination,
       status: "DRAFT",
       notes: notes || null,
       items: {
@@ -272,11 +298,14 @@ const createPurchaseOrder = async (data) => {
   const {
     supplierId,
     requisitionId,
+    destinationWarehouseId,
     expectedDate,
     notes,
     taxAmount = 0,
     items,
   } = data;
+
+  const requestedDestination = optionalDestination(destinationWarehouseId);
 
   const parsedSupplierId = toId(
     supplierId,
@@ -458,9 +487,28 @@ const createPurchaseOrder = async (data) => {
       "expectedDate"
     );
 
+    // The destination is inherited from the requisition. Naming a different one is a
+    // client error; naming one when the requisition has none is allowed.
+    if (
+      requisition?.destinationWarehouseId &&
+      requestedDestination &&
+      requestedDestination !== requisition.destinationWarehouseId
+    ) {
+      throw new ValidationError(
+        "destinationWarehouseId differs from the requisition's destination warehouse"
+      );
+    }
+
+    const destination = requisition?.destinationWarehouseId ?? requestedDestination;
+
+    if (destination) {
+      await activeWarehouseOrThrow(tx, destination);
+    }
+
     return tx.purchaseOrder.create({
       data: {
         poNumber: makeNumber("PO"),
+        destinationWarehouseId: destination,
         supplierId: parsedSupplierId,
         requisitionId: requisition
           ? requisition.id
@@ -562,10 +610,12 @@ const approvePurchaseOrder = async (id, actorId) => {
   });
 };
 
-const createGoodsReceipt = async (data, actorId) => {
+const createGoodsReceipt = async (data, actor = {}) => {
+  const actorId = actor.id;
   const {
     purchaseOrderId,
     warehouseId,
+    allowDifferentWarehouse = false,
     notes,
     items,
   } = data;
@@ -575,10 +625,10 @@ const createGoodsReceipt = async (data, actorId) => {
     "purchaseOrderId"
   );
 
-  const parsedWarehouseId = toId(
-    warehouseId,
-    "warehouseId"
-  );
+  const requestedWarehouseId =
+    warehouseId === undefined || warehouseId === null || warehouseId === ""
+      ? null
+      : toId(warehouseId, "warehouseId");
 
   if (!Array.isArray(items) || items.length === 0) {
     throw new ValidationError(
@@ -601,7 +651,7 @@ const createGoodsReceipt = async (data, actorId) => {
     // every earlier receipt (D-03). Receipts always take this lock before any
     // inventory row lock, and nothing takes them in the opposite order.
     const locked = await tx.$queryRaw`
-      SELECT "id", "status" FROM "PurchaseOrder"
+      SELECT "id", "status", "destinationWarehouseId" FROM "PurchaseOrder"
       WHERE "id" = ${parsedPurchaseOrderId}::int
       FOR UPDATE
     `;
@@ -620,15 +670,45 @@ const createGoodsReceipt = async (data, actorId) => {
       );
     }
 
-    const warehouse = await tx.warehouse.findFirst({
-      where: {
-        id: parsedWarehouseId,
-        isActive: true,
-      },
-    });
+    // Default to the purchase order's destination; a different warehouse is a 400
+    // unless the caller is allowed to override and says so (then it is audited).
+    const destinationId = locked[0].destinationWarehouseId;
+    const parsedWarehouseId = requestedWarehouseId ?? destinationId;
 
-    if (!warehouse) {
-      throw new NotFoundError("Active warehouse not found");
+    if (!parsedWarehouseId) {
+      throw new ValidationError(
+        "warehouseId is required because the purchase order has no destination warehouse"
+      );
+    }
+
+    const overriding = Boolean(destinationId) && parsedWarehouseId !== destinationId;
+
+    if (overriding) {
+      if (!allowDifferentWarehouse) {
+        throw new ValidationError(
+          `The purchase order is destined for warehouse ${destinationId}; set allowDifferentWarehouse to receive elsewhere`
+        );
+      }
+
+      if (!WAREHOUSE_OVERRIDE_ROLES.includes(actor.role)) {
+        throw new ForbiddenError(
+          "Only an ADMIN or WAREHOUSE_MANAGER may receive into a different warehouse"
+        );
+      }
+    }
+
+    const warehouse = await activeWarehouseOrThrow(tx, parsedWarehouseId);
+
+    if (overriding) {
+      await writeAudit(tx, {
+        eventType: "GOODS_RECEIPT_WAREHOUSE_OVERRIDE",
+        actorUserId: actorId ?? null,
+        payload: {
+          purchaseOrderId: parsedPurchaseOrderId,
+          destinationWarehouseId: destinationId,
+          receivedIntoWarehouseId: parsedWarehouseId,
+        },
+      });
     }
 
     const purchaseOrderItems = await tx.purchaseOrderItem.findMany({
