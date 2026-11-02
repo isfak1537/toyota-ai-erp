@@ -12,9 +12,9 @@ accuracy a real plant would see. Python 3.13.5, pandas 3.1.0, scikit-learn 1.9.1
   14.3% lower holdout MAE than the 7/14-day moving average (1.317 vs 1.536 units/day) and is better on 18 of 24 series.
 * **Why the policy replaced "lower holdout MAE per series".** That rule reports 1.294, but only because it picks each winner on the days it is scored on.
   Its nested (honest) estimate is 1.414, worse than the policy (1.317).
-* **Anomalies.** The four rules catch 6 of 8 injected anomalies, by construction. The
-  Isolation Forest catches **0 of 8** at its 0.5% operating point, although it ranks them
-  far above chance (ROC-AUC 0.85). Combined precision is 0.18: 27 of 33 flags are not labelled anomalies.
+* **Anomalies (second pass).** Rules R1-R5 catch 7 of 8 injected anomalies (before: 6), the weekly review queue of 10 catches
+  6 (before the Isolation Forest's 0.5% cut caught 0), and together they catch 8. The price is workload: 147 flags instead of 33,
+  combined precision 0.054 instead of 0.182. Most of the recall gain comes from excluding document-linked receipts, which also makes the model blind to a wrong receipt that has a document.
 
 ## 1. Forecasting (AI-001..AI-003)
 
@@ -54,59 +54,108 @@ The policy's advantage is 7.9% without the steered series, against 14.3% with th
 
 ## 2. Anomaly detection (AI-008)
 
-Eight anomalies were injected with ground-truth labels. The labels are used **only** for this evaluation, never for training, rule thresholds or the
-contamination rate (0.5%, fixed beforehand). 2,978 transactions were scored.
+Eight anomalies were injected with ground-truth labels. The labels are used **only** for this evaluation, never for training, rule thresholds, the exclusion or the queue size.
+2,978 transactions were scored, 2,762 of them eligible for the review queue.
+
+**What changed in this pass** (decided before the results were seen, nothing tuned afterwards):
+
+1. **Eligibility.** Movements that are not on-hand changes (reservations, releases) and receipts that carry a document link (a PO or goods receipt) are scored but never enter the model's training or the queue. Chosen from data fields, not labels.
+2. **R5, duplicate movement:** the same product, warehouse, type and quantity 10 minutes or less after the previous one. The window was fixed in advance.
+3. **Risk score and review queue.** The Isolation Forest is no longer cut at a 0.5% contamination rate. Its score becomes a risk percentile among eligible training rows, and the top 10 eligible rows per local week form the review queue,
+   each with its score and its top three contributing features (found by replacing one feature at a time with its typical value).
+4. R1 and R2 are unchanged. The analysis of their false positives is below.
+
+### Before and after
+
+| Detector | Caught before | Caught after | FP before | FP after | Precision before | Precision after | Recall before | Recall after |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Rules | 6 / 8 | 7 / 8 | 13 | 38 | 0.316 | 0.156 | 0.75 | 0.88 |
+| Model (before: 0.5% cut; after: weekly queue) | 0 / 8 | 6 / 8 | 14 | 134 | 0.000 | 0.043 | 0.00 | 0.75 |
+| Combined | 6 / 8 | 8 / 8 | 27 | 139 | 0.182 | 0.054 | 0.75 | 1.00 |
+| Flags raised |  |  |  |  | 33 | 147 |  |  |
+
+Detection by anomaly type (before -> after):
 
 | Anomaly type | Injected | Rules | Model | Combined |
 | --- | --- | --- | --- | --- |
-| Duplicate Issue | 1 | 0 / 1 | 0 / 1 | 0 / 1 |
-| Manual Receipt | 1 | 1 / 1 | 0 / 1 | 1 / 1 |
-| Negative Adjustment | 2 | 2 / 2 | 0 / 2 | 2 / 2 |
-| Off Hours Issue | 2 | 2 / 2 | 0 / 2 | 2 / 2 |
-| Spike Issue | 2 | 1 / 2 | 0 / 2 | 1 / 2 |
-| **All** | 8 | **6 / 8** | **0 / 8** | **6 / 8** |
+| Duplicate Issue | 1 | 0 -> 1 | 0 -> 1 | 0 -> 1 |
+| Manual Receipt | 1 | 1 -> 1 | 0 -> 1 | 1 -> 1 |
+| Negative Adjustment | 2 | 2 -> 2 | 0 -> 2 | 2 -> 2 |
+| Off Hours Issue | 2 | 2 -> 2 | 0 -> 0 | 2 -> 2 |
+| Spike Issue | 2 | 1 -> 1 | 0 -> 2 | 1 -> 2 |
+| **All** | 8 | 6 -> 7 | 0 -> 6 | 6 -> 8 |
 
-| Detector | Caught | Missed | False positives | Precision | Recall |
-| --- | --- | --- | --- | --- | --- |
-| Rules | 6 | 2 | 13 | 0.32 | 0.75 |
-| Model | 0 | 8 | 14 | 0.00 | 0.00 |
-| Combined | 6 | 2 | 27 | 0.18 | 0.75 |
+Threshold-free ranking of the risk score: ROC-AUC 0.85 -> 0.87, average precision 0.035 -> 0.544
+(random 0.0029); labelled anomalies in the top 10 / 20 / 50: 0 / 0 / 2 -> 5 / 5 / 6.
+The new figures are over the 2,761 eligible rows, the old ones over all rows, so the two are not like for like.
 
-* **Rules catch what they were written for.** The injected anomalies were designed with the same ideas the rules encode (outside business hours, a large negative
-  adjustment, a large manual receipt), so rule recall here is a construction check, not a discovery.
-* **The model finds none of them at its operating point.** Its 14 flags are all RECEIPT rows. Threshold-free it does rank
-  the labelled rows well above chance: ROC-AUC 0.85, average precision 0.035 against 0.0027 for a random ranking
-  (13x); 2 of 8 are in its top 50.
-* **Missed by everything:** A-05 (spike issue), A-06 (duplicate issue).
-* **Why the model misses the off-hours events.** Only 2 of 2,978 transactions are outside business hours; in most trees' random subsamples that feature is constant, so it cannot isolate them
-  (see the notebook for the measured share of trees).
+### Precision and recall at N per week
 
-**False positives (27 of 33 flags), by likely cause:**
+N = 10 was fixed before looking at results. N = 5 and 20 are shown only to see how sensitive the result is. A queue row that is the original of a labelled duplicate counts as neither a hit nor a false alarm.
+
+| N per week | Queue rows | Hits | Precision@N | Recall@N | Queue + rules rows | Hits | Precision | Recall |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 5 (sensitivity only) | 70 | 6 | 0.086 | 0.75 | 96 | 8 | 0.083 | 1.00 |
+| 10 (chosen up front) | 140 | 6 | 0.043 | 0.75 | 147 | 8 | 0.054 | 1.00 |
+| 20 (sensitivity only) | 280 | 6 | 0.021 | 0.75 | 282 | 8 | 0.028 | 1.00 |
+
+A random queue of the same size would have precision 0.0029, so the queue is about 15x better than chance. Precision@N is low because the queue is a fixed size:
+with eight anomalies in 90 days, most weeks have none, and the queue is full anyway.
+
+* **Rules catch what they were written for.** The injected anomalies were designed with the same ideas the rules encode, so rule recall is a construction check, not a discovery.
+* **Missed by the queue:** A-03 (off hours issue, rank 1974), A-08 (off hours issue, rank 813). Off-hours events are too rare for a forest to learn
+  from (see the notebook); the rules catch them.
+* **Missed by everything:** nothing.
+* **R5 is noisy.** It fires on 26 rows, because identical repeated issues are common in small-count demand. One is the labelled duplicate.
+
+### False positives by cause
+
+Before (13 rule + 14 model false positives, commit 5b78db1):
+
+| Source, type and cause | Flags |
+| --- | --- |
+| RULE ISSUE ordinary large movement | 10 |
+| MODEL RECEIPT opening stock | 8 |
+| MODEL RECEIPT large goods receipt | 6 |
+| RULE ISSUE last-day trim | 2 |
+| RULE ADJUSTMENT routine cycle count | 1 |
+
+All 13 rule false positives were examined by data fields. None has a document link and none is a receipt. 12 are R2 hits on issues of 1.2 to 3.2 times the product's mean daily demand (natural tails of the demand
+distribution, two of them the generator's last-day trim), and 1 is an R1 hit on a routine cycle-count adjustment. No data field separates them from a true anomaly, so R1 and R2 were left alone.
+A criterion in days of demand would remove most of them, but choosing it now would be tuning on the labels I have seen; it is an owner decision (section 4).
+
+After (139 false positives of 147 flags):
 
 | Source | Type | Likely cause | Flags |
 | --- | --- | --- | --- |
-| RULE | ISSUE | ordinary large movement (natural tail of the demand distribution) | 10 |
-| MODEL | RECEIPT | opening stock received on day 1 (a one-off, large by design) | 8 |
-| MODEL | RECEIPT | large goods receipt (a legitimate replenishment order) | 6 |
-| RULE | ISSUE | last-day trim: the generator landing a demo stock level (synthetic demand shaping) | 2 |
-| RULE | ADJUSTMENT | ordinary large movement (natural tail of the demand distribution) | 1 |
+| MODEL | ISSUE | ordinary large movement (natural tail of the demand distribution) | 62 |
+| BOTH | ISSUE | ordinary large movement (natural tail of the demand distribution) | 30 |
+| MODEL | ADJUSTMENT | ordinary large movement (natural tail of the demand distribution) | 22 |
+| MODEL | TRANSFER_IN | ordinary large movement (natural tail of the demand distribution) | 6 |
+| MODEL | TRANSFER_OUT | ordinary large movement (natural tail of the demand distribution) | 6 |
+| RULE | ISSUE | ordinary large movement (natural tail of the demand distribution) | 5 |
+| MODEL | ISSUE | last-day trim: the generator landing a demo stock level (synthetic demand shaping) | 3 |
+| BOTH | ISSUE | last-day trim: the generator landing a demo stock level (synthetic demand shaping) | 2 |
+| MODEL | ISSUE | steered demo product, last 12 days (synthetic demand shaping) | 2 |
+| BOTH | ADJUSTMENT | ordinary large movement (natural tail of the demand distribution) | 1 |
 
-10 of the 27 are artefacts of how the synthetic data was built (opening stock, the generator's last-day trims, steered products); 17 remain on ordinary data:
-large legitimate goods receipts that the model finds unusual, and ordinary tail events that rule R2 flags. R2's robust z-score is not conservative for Poisson-like counts.
+7 of the 139 are artefacts of how the synthetic data was built (the generator's last-day trims, steered products); 132 are on ordinary data.
 
 ## 3. What not to conclude
 
-* Not that ML forecasting is 14.3% better for a real plant, or that the Isolation Forest does not work: it was given 8 synthetic anomalies, 6 of which the rules already cover.
+* Not that ML forecasting is 14.3% better for a real plant, or that the Isolation Forest does not work: it was given 8 synthetic anomalies, most of which the rules already cover.
 * Not that the old per-series figure (1.294) was ever the expected accuracy of a selection rule; only the nested estimate (1.414) is.
-* Not that rule or model thresholds are good: they were deliberately not tuned on 8 labels.
+* Not that rule or model thresholds are good: they were deliberately not tuned on 8 labels. The queue size, the R5 window and the eligibility exclusion were fixed before the results; N = 5 and 20 are a sensitivity check.
+* Not that precision 0.05 is acceptable: it is the cost of a fixed-size queue plus R5 on data with 8 anomalies in 90 days.
 * Demand is observed issues; stock-outs hide demand (censoring). The synthetic data has very few; real data may not.
 * No outlier cleaning was applied: the injected anomalies remain in the training series (their effect is small but not zero).
 
 ## 4. Options for the owner (not implemented)
 
 1. **AI-003 is decided** (see SRS): ML from 28 days of history, the baseline before. A margin rule ("baseline only if it wins by X") would need more than 14 days of evidence per series.
-2. **Receipts as model noise.** Large goods receipts and the opening stock dominate the model's flags; scoring receipts separately, or excluding the opening balance, would reduce them.
-3. **A duplicate rule** (identical movement within minutes) and a Poisson-aware size threshold for R2 would address the two clearest misses/false alarms. They were left out so the model could be evaluated on duplicates.
+2. **Blind spot of the eligibility rule.** Receipts that carry a PO or goods-receipt link are never scored by the model. A wrong receipt that has a document (wrong quantity, wrong supplier price) would pass. Cross-checking them
+   against the order quantity is a separate rule, not a statistical one.
+3. **Days-of-demand criterion for R2.** Twelve of the 13 original rule false positives were issues of 1.2 to 3.2 times the mean daily demand. Requiring, say, more than N days of demand would remove them. I did not choose N, because I have seen the labels.
 4. **Rare signals need a rule.** Off-hours activity is too rare in the data for a forest to learn from (the feature is already continuous); keep the rule, and consider a supervised component once real labels exist.
 
 ## Reproduce

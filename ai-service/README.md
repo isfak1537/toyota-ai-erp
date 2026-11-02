@@ -8,7 +8,7 @@ business records.
 ## Setup
 
 Python 3.11 or newer is required (3.12 or 3.13 recommended; developed and tested
-on 3.13.5). Create the venv with an explicit interpreter:
+on 3.13.5, which is fine for now; the hosting runtime is decided in P7). Create the venv with an explicit interpreter:
 
 ```
 cd ai-service
@@ -57,7 +57,7 @@ The service refuses to start without a secret of at least 16 characters.
 |---|---|
 | `GET /health` | open; status, version, active model versions |
 | `POST /forecast` | `{series:[{productId,warehouseId}], horizonDays 1-30, asOf?}` -> baseline, ML and selected daily forecast with sigma, holdout MAEs, 90 days of history |
-| `POST /anomalies/score` | `{transactionIds}` or `{from,to}` (UTC, max 31 days) -> flags with score, source RULE/MODEL/BOTH, reason |
+| `POST /anomalies/score` | `{transactionIds}` or `{from,to}` (UTC, max 31 days), optional `queueSize` (0-100, default 10, 0 = rules only), `queuePeriod` (`week`/`day`) -> per row `riskScore` (0-1), `queueRank` (only if in the review queue), `topFeatures`, `ruleCodes` (R1-R5), source RULE/MODEL/BOTH, reason. Reservations and receipts with a document link are scored but never queued |
 | `POST /train` | `{models:["forecast","anomaly"], asOf?}` -> trains, evaluates, registers and activates new versions |
 
 Everything except `/health` returns 401 without the secret, including unknown paths; `/docs` and `/openapi.json` are off.

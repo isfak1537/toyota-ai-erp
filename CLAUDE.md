@@ -112,7 +112,7 @@ Keep `npm test` passing.
 - P2 + P3 (AI service) are built on branch `phase-2-ai-service` and wait for the owner's confirmation:
   `GET /health`, `POST /forecast`, `POST /anomalies/score`, `POST /train` behind `X-AI-Service-Secret`; global
   gradient-boosting forecast vs a moving-average baseline (14-day holdout, nested selection estimate, sigma from
-  residuals); four rules + Isolation Forest anomaly detection evaluated against `anomaly-labels.json`; model registry
+  residuals); rules R1-R5 + an Isolation Forest risk score with a weekly review queue (top 10 per local week, top contributing features), evaluated against `anomaly-labels.json`; model registry
   with deterministic versions; notebooks and `ai-service/REPORT.md`. The ERP API does not call it yet (P4).
 - Next: P4 (ERP AI module: replenishment, suggestions, approval, minimal auth). Update this section when a phase gate passes.
 
@@ -150,11 +150,13 @@ Keep `npm test` passing.
 - Prisma's query engine runs nested `include` queries concurrently on one transaction connection;
   pg logs a deprecation warning that becomes an error in pg@9. Track upstream before upgrading pg.
 - AI service results to decide on (see `ai-service/REPORT.md`): per-series model selection as written in AI-003 is
-  optimistic (nested estimate 1.414 vs 1.317 for always using the ML model); the Isolation Forest catches 0 of the 8
-  injected anomalies at its 0.5% operating point (the rules catch 6, by construction); rule R2 fires on ordinary
-  tail events. Thresholds were deliberately not tuned on 8 labels.
+  optimistic (nested estimate 1.414 vs 1.317 for always using the ML model); after the second anomaly pass the
+  rules catch 7 of 8 and the weekly queue 6 of 8 (together 8 of 8), but flags rose from 33 to 147 and combined precision fell
+  from 0.18 to 0.05; most of the recall gain comes from not scoring document-linked receipts, which blinds the model to a wrong
+  receipt that has a document. Rule R2 fires on ordinary tail events; a days-of-demand criterion is an owner decision.
+  Thresholds were deliberately not tuned on 8 labels.
 - The AI service stores models as joblib pickles under `ai-service/models/` (gitignored): load only artefacts it trained
   itself. `/train` is synchronous (seconds on this data) and one run at a time.
-- Python environment: the service was built and tested on python.org 3.13.5. Homebrew's Python 3.12.16 and 3.14.7 have an
+- Python environment: the service was built and tested on python.org 3.13.5; that is fine for now and the hosting runtime is decided in P7. Homebrew's Python 3.12.16 and 3.14.7 have an
   empty `platform.mac_ver()` on macOS 26 and break pip inside venvs; use a python.org or pyenv build.
 - The AI service reads the whole ledger series it is asked about; fine for the MVP, add a date window when ledgers grow.
