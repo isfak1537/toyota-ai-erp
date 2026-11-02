@@ -8,41 +8,16 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
-from app.data.series import daily_demand, series_map, to_local_day
+from app.data.asof import as_of_day
+from app.data.series import daily_demand, series_map
 from app.data.sources import LedgerSource
+from app.errors import ServiceError
 from app.forecasting.baseline import CANDIDATE_WINDOWS, moving_average_forecast, select_window
 from app.forecasting.evaluate import BASELINE, HOLDOUT_DAYS, ML
 from app.forecasting.training import KIND, TrainOutcome, _fallback_sigma, train_forecasting
 from app.registry import ModelRegistry, RegistryError
 
 HISTORY_DAYS = 90
-
-
-class ServiceError(RuntimeError):
-    """A request that cannot be served; `status` is the HTTP status to answer with."""
-
-    def __init__(self, message: str, status: int):
-        super().__init__(message)
-        self.status = status
-
-
-def _as_of_day(source: LedgerSource, tz_offset_hours: int, requested: dt.date | None) -> pd.Timestamp:
-    latest = source.latest_timestamp()
-
-    if latest is None:
-        raise ServiceError("The ledger is empty", 409)
-
-    latest_day = to_local_day(pd.Series([latest]), tz_offset_hours).iloc[0]
-
-    if requested is None:
-        return latest_day
-
-    requested_day = pd.Timestamp(requested)
-
-    if requested_day > latest_day:
-        raise ServiceError(f"asOf {requested_day.date()} is after the latest ledger day {latest_day.date()}", 400)
-
-    return requested_day
 
 
 class ForecastService:
@@ -74,7 +49,7 @@ class ForecastService:
         return self.registry.active_version(KIND)
 
     def train(self, as_of: dt.date | None = None) -> TrainOutcome:
-        day = _as_of_day(self.source, self.tz_offset_hours, as_of)
+        day = as_of_day(self.source, self.tz_offset_hours, as_of)
         demand = daily_demand(self.source.ledger(), self.tz_offset_hours, as_of=day)
 
         if demand.empty:
@@ -84,7 +59,7 @@ class ForecastService:
 
     def forecast(self, refs: Sequence[tuple[int, int]], horizon: int, as_of: dt.date | None = None) -> dict:
         version, artifact, _ = self._active()
-        day = _as_of_day(self.source, self.tz_offset_hours, as_of)
+        day = as_of_day(self.source, self.tz_offset_hours, as_of)
         wanted = list(dict.fromkeys(refs))
         demand = daily_demand(self.source.ledger(series=wanted), self.tz_offset_hours, as_of=day)
         histories = series_map(demand)

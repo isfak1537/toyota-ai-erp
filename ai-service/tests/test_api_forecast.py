@@ -28,9 +28,9 @@ class CountingSource:
         self.inner = inner
         self.calls = []
 
-    def ledger(self, ids=None, series=None):
-        frame = self.inner.ledger(ids=ids, series=series)
-        self.calls.append({"series": series, "rows": len(frame)})
+    def ledger(self, **filters):  # forwards every filter, so it cannot drift from the source interface
+        frame = self.inner.ledger(**filters)
+        self.calls.append({"series": filters.get("series"), "rows": len(frame)})
 
         return frame
 
@@ -81,7 +81,7 @@ def test_training_registers_a_version_that_health_then_reports(trained):
     assert outcome["kind"] == "forecast" and outcome["activated"] is True
     assert re.fullmatch(r"forecast-20261101-[0-9a-f]{8}", outcome["version"])
     assert set(outcome["metrics"]["overall"]) == {"baseline", "ml", "selected", "nested_selected", "seasonal_naive"}
-    assert client.get("/health").json()["models"] == {"forecast": outcome["version"]}
+    assert client.get("/health").json()["models"]["forecast"] == outcome["version"]
     assert registry.active_version("forecast") == outcome["version"]
 
 

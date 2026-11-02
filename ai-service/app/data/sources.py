@@ -46,7 +46,13 @@ SeriesRef = tuple[int, int]  # (product_id, warehouse_id)
 
 
 class LedgerSource(Protocol):
-    def ledger(self, ids: Sequence[int] | None = None, series: Sequence[SeriesRef] | None = None) -> pd.DataFrame: ...
+    def ledger(
+        self,
+        ids: Sequence[int] | None = None,
+        series: Sequence[SeriesRef] | None = None,
+        created_from: pd.Timestamp | None = None,
+        created_to: pd.Timestamp | None = None,
+    ) -> pd.DataFrame: ...
 
     def latest_timestamp(self) -> pd.Timestamp | None: ...
 
@@ -68,7 +74,13 @@ class CsvSource:
     def __init__(self, directory: str | Path):
         self.directory = Path(directory)
 
-    def ledger(self, ids: Sequence[int] | None = None, series: Sequence[SeriesRef] | None = None) -> pd.DataFrame:
+    def ledger(
+        self,
+        ids: Sequence[int] | None = None,
+        series: Sequence[SeriesRef] | None = None,
+        created_from: pd.Timestamp | None = None,
+        created_to: pd.Timestamp | None = None,
+    ) -> pd.DataFrame:
         raw = pd.read_csv(self.directory / "ledger.csv").rename(
             columns={
                 "productId": "product_id",
@@ -87,6 +99,12 @@ class CsvSource:
         if series is not None:
             wanted = pd.MultiIndex.from_tuples(list(series), names=["product_id", "warehouse_id"])
             frame = frame[pd.MultiIndex.from_frame(frame[["product_id", "warehouse_id"]]).isin(wanted)]
+
+        if created_from is not None:
+            frame = frame[frame["created_at"] >= created_from]
+
+        if created_to is not None:
+            frame = frame[frame["created_at"] < created_to]  # end exclusive
 
         return frame.reset_index(drop=True)
 
@@ -121,8 +139,22 @@ class PostgresSource:
 
                 return pd.DataFrame(cursor.fetchall(), columns=columns)
 
-    def ledger(self, ids: Sequence[int] | None = None, series: Sequence[SeriesRef] | None = None) -> pd.DataFrame:
+    def ledger(
+        self,
+        ids: Sequence[int] | None = None,
+        series: Sequence[SeriesRef] | None = None,
+        created_from: pd.Timestamp | None = None,
+        created_to: pd.Timestamp | None = None,
+    ) -> pd.DataFrame:
         conditions, params = [], []
+
+        if created_from is not None:
+            conditions.append('"createdAt" >= %s')
+            params.append(pd.Timestamp(created_from).to_pydatetime())
+
+        if created_to is not None:
+            conditions.append('"createdAt" < %s')
+            params.append(pd.Timestamp(created_to).to_pydatetime())
 
         if ids is not None:
             conditions.append('"id" = ANY(%s)')

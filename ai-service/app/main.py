@@ -15,10 +15,12 @@ from app import __version__
 from app.auth import PUBLIC_PATHS, SECRET_HEADER, UNAUTHORIZED, require_secret, secret_matches
 from app.config import Settings
 from app.data.sources import LedgerSource, PostgresSource
-from app.forecasting.service import ForecastService, ServiceError
+from app.anomaly.service import AnomalyService
+from app.errors import ServiceError
+from app.forecasting.service import ForecastService
 from app.registry import ModelRegistry
 from app.runtime import check_python
-from app.schemas import ForecastRequest, TrainRequest
+from app.schemas import AnomalyScoreRequest, ForecastRequest, TrainRequest
 
 SERVICE_NAME = "toyota-erp-ai-service"
 
@@ -56,6 +58,9 @@ def create_app(
     def forecasting() -> ForecastService:
         return ForecastService(ledger_source(), registry, settings.tz_offset_hours)
 
+    def anomalies() -> AnomalyService:
+        return AnomalyService(ledger_source(), registry, settings.tz_offset_hours)
+
     def as_http(error: ServiceError) -> HTTPException:
         return HTTPException(error.status, detail=str(error))
 
@@ -78,7 +83,7 @@ def create_app(
             "service": SERVICE_NAME,
             "version": __version__,
             "python": ".".join(str(part) for part in sys.version_info[:3]),
-            "models": {"forecast": registry.active_version("forecast")},
+            "models": {"forecast": registry.active_version("forecast"), "anomaly": registry.active_version("anomaly")},
         }
 
     protected = APIRouter(dependencies=[Depends(require_secret)])
@@ -93,35 +98,34 @@ def create_app(
             raise as_http(error) from error
 
     @protected.post("/anomalies/score")
-    def score_anomalies() -> dict:
-        raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    def score_anomalies(body: AnomalyScoreRequest) -> dict:
+        created_from, created_to = body.range_utc()
+
+        try:
+            return anomalies().score(body.transactionIds, created_from, created_to, body.includeAll)
+        except ServiceError as error:
+            raise as_http(error) from error
 
     @protected.post("/train")
     def train(body: TrainRequest) -> dict:
-        if "anomaly" in body.models:
-            raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, detail="Anomaly training is not implemented yet")
-
-        # one retrain at a time; serving the previous model is never interrupted (AI-013)
+        # one retrain at a time; serving the previous models is never interrupted (AI-013)
         if not app.state.train_lock.acquire(blocking=False):
             raise HTTPException(status.HTTP_409_CONFLICT, detail="A training run is already in progress")
 
+        trained = []
+
         try:
-            outcome = forecasting().train(body.asOf)
+            for kind in dict.fromkeys(body.models):  # requested order, no duplicates
+                outcome = (forecasting() if kind == "forecast" else anomalies()).train(body.asOf)
+                trained.append(
+                    {"kind": kind, "version": outcome.version, "activated": outcome.activated, "metrics": outcome.metrics}
+                )
         except ServiceError as error:
             raise as_http(error) from error
         finally:
             app.state.train_lock.release()
 
-        return {
-            "trained": [
-                {
-                    "kind": "forecast",
-                    "version": outcome.version,
-                    "activated": outcome.activated,
-                    "metrics": outcome.metrics,
-                }
-            ]
-        }
+        return {"trained": trained}
 
     app.include_router(protected)
 

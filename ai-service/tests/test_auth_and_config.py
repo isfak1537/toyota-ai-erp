@@ -15,7 +15,7 @@ def test_health_is_open_and_reveals_no_data(client):
     body = response.json()
     assert body["status"] == "ok"
     assert set(body) == {"status", "service", "version", "python", "models"}
-    assert body["models"] == {"forecast": None}  # nothing trained yet
+    assert body["models"] == {"forecast": None, "anomaly": None}  # nothing trained yet
 
 
 @pytest.mark.parametrize("path", PROTECTED)

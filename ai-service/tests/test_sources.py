@@ -117,3 +117,35 @@ def test_the_database_role_can_read_but_not_write():
             connection.rollback()
             with pytest.raises(psycopg.Error):
                 cursor.execute('SELECT "reason" FROM "InventoryTransaction" LIMIT 1')
+
+
+@pytest.mark.db
+def test_the_postgres_source_filters_by_series_and_time_and_reports_the_latest_movement():
+    from dotenv import dotenv_values
+
+    url = os.environ.get("AI_DB_URL") or dotenv_values(Path(__file__).parent.parent / ".env").get("AI_DB_URL")
+
+    if not url:
+        pytest.skip("AI_DB_URL is not configured")
+
+    source = sources.PostgresSource(url)
+    everything = source.ledger()
+    latest = source.latest_timestamp()
+
+    assert latest == everything["created_at"].max()
+
+    first = everything.iloc[0]
+    one = (int(first["product_id"]), int(first["warehouse_id"]))
+    wanted = source.ledger(series=[one])
+    expected = everything[(everything["product_id"] == one[0]) & (everything["warehouse_id"] == one[1])]
+
+    assert list(wanted["id"]) == list(expected["id"])
+    assert source.ledger(series=[]).empty
+
+    cut = everything["created_at"].iloc[len(everything) // 2]
+    window = source.ledger(created_from=cut, created_to=cut + pd.Timedelta(days=2))
+
+    assert not window.empty
+    assert window["created_at"].min() >= cut and window["created_at"].max() < cut + pd.Timedelta(days=2)
+    assert list(source.ledger(ids=[int(first["id"])])["id"]) == [int(first["id"])]
+    assert len(source.products()) > 0 and len(source.warehouses()) > 0
