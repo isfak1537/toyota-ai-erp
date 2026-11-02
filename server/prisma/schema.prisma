@@ -1,0 +1,491 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Company {
+  id           Int      @id @default(autoincrement())
+  name         String
+  code         String   @unique
+  address      String?
+  country      String?
+  currencyCode String?  @db.Char(3)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  factories Factory[]
+  customers Customer[]
+
+  @@index([isActive])
+}
+
+model Factory {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String
+  companyId Int
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company    Company     @relation(fields: [companyId], references: [id])
+  warehouses Warehouse[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@index([isActive])
+}
+
+model Warehouse {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String
+  factoryId Int
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  factory               Factory                @relation(fields: [factoryId], references: [id])
+  inventory             Inventory[]
+  inventoryTransactions InventoryTransaction[]
+
+  outgoingTransfers StockTransfer[] @relation("FromWarehouse")
+  incomingTransfers StockTransfer[] @relation("ToWarehouse")
+
+  goodsReceipts GoodsReceipt[]
+
+  @@unique([factoryId, code])
+  @@index([factoryId])
+  @@index([isActive])
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id             Int     @id @default(autoincrement())
+  sku            String  @unique
+  name           String
+  description    String?
+  barcode        String? @unique
+  price          Decimal @db.Decimal(12, 2)
+  unit           String
+  categoryId     Int?
+  isActive       Boolean @default(true)
+  isStockTracked Boolean @default(true)
+  reorderLevel   Int     @default(0)
+  minStock       Int     @default(0)
+  maxStock       Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category             Category?                 @relation(fields: [categoryId], references: [id])
+  inventory            Inventory[]
+  suppliers            SupplierProduct[]
+  transactions         InventoryTransaction[]
+  transferItems        StockTransferItem[]
+  requisitionItems     PurchaseRequisitionItem[]
+  purchaseOrderItems   PurchaseOrderItem[]
+  goodsReceiptItems    GoodsReceiptItem[]
+  purchaseInvoiceItems PurchaseInvoiceItem[]
+  salesOrderItems      SalesOrderItem[]
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([isStockTracked])
+}
+
+model Supplier {
+  id               Int     @id @default(autoincrement())
+  name             String
+  code             String  @unique
+  email            String?
+  phone            String?
+  address          String?
+  paymentTermsDays Int?
+  isActive         Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products             SupplierProduct[]
+  purchaseRequisitions PurchaseRequisition[]
+  purchaseOrders       PurchaseOrder[]
+  purchaseInvoices     PurchaseInvoice[]
+
+  @@index([isActive])
+}
+
+model SupplierProduct {
+  id              Int     @id @default(autoincrement())
+  supplierId      Int
+  productId       Int
+  supplierSku     String?
+  unitPrice       Decimal @db.Decimal(12, 2)
+  leadTimeDays    Int?
+  minimumOrderQty Int     @default(1)
+  isPreferred     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
+
+  @@unique([supplierId, productId])
+  @@index([supplierId])
+  @@index([productId])
+  @@index([isPreferred])
+}
+
+model Customer {
+  id               Int      @id @default(autoincrement())
+  customerCode     String   @unique
+  name             String
+  email            String?
+  phone            String?
+  address          String?
+  city             String?
+  country          String?
+  taxNumber        String?
+  creditLimit      Decimal  @default(0) @db.Decimal(14, 2)
+  paymentTermsDays Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  companyId   Int?
+  company     Company?     @relation(fields: [companyId], references: [id])
+  salesOrders SalesOrder[]
+
+  @@index([companyId])
+  @@index([isActive])
+  @@index([name])
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CANCELLED
+}
+
+model SalesOrder {
+  id           Int              @id @default(autoincrement())
+  orderNumber  String           @unique
+  customerId   Int
+  status       SalesOrderStatus @default(DRAFT)
+  orderDate    DateTime         @default(now())
+  expectedDate DateTime?
+  notes        String?
+  subtotal     Decimal          @db.Decimal(14, 2)
+  taxAmount    Decimal          @default(0) @db.Decimal(14, 2)
+  totalAmount  Decimal          @db.Decimal(14, 2)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  customer Customer         @relation(fields: [customerId], references: [id])
+  items    SalesOrderItem[]
+
+  @@index([customerId])
+  @@index([status])
+  @@index([orderDate])
+}
+
+model SalesOrderItem {
+  id                Int     @id @default(autoincrement())
+  salesOrderId      Int
+  productId         Int
+  quantity          Int
+  deliveredQuantity Int     @default(0)
+  unitPrice         Decimal @db.Decimal(12, 2)
+  lineTotal         Decimal @db.Decimal(14, 2)
+
+  salesOrder SalesOrder @relation(fields: [salesOrderId], references: [id])
+  product    Product    @relation(fields: [productId], references: [id])
+
+  @@unique([salesOrderId, productId])
+  @@index([productId])
+}
+
+model Inventory {
+  id               Int @id @default(autoincrement())
+  productId        Int
+  warehouseId      Int
+  quantity         Int @default(0)
+  reservedQuantity Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@unique([productId, warehouseId])
+  @@index([productId])
+  @@index([warehouseId])
+}
+
+enum InventoryTransactionType {
+  RECEIPT
+  ISSUE
+  ADJUSTMENT
+  TRANSFER_IN
+  TRANSFER_OUT
+  RESERVATION
+  RELEASE
+}
+
+model InventoryTransaction {
+  id            Int                      @id @default(autoincrement())
+  productId     Int
+  warehouseId   Int
+  type          InventoryTransactionType
+  quantity      Int
+  balanceAfter  Int
+  referenceType String?
+  referenceId   Int?
+  reason        String?
+  createdAt     DateTime                 @default(now())
+
+  product   Product   @relation(fields: [productId], references: [id])
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([productId])
+  @@index([warehouseId])
+  @@index([type])
+  @@index([createdAt])
+  @@index([referenceType, referenceId])
+}
+
+enum StockTransferStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+model StockTransfer {
+  id              Int                 @id @default(autoincrement())
+  transferNumber  String              @unique
+  fromWarehouseId Int
+  toWarehouseId   Int
+  status          StockTransferStatus @default(DRAFT)
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  fromWarehouse Warehouse           @relation("FromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouse   Warehouse           @relation("ToWarehouse", fields: [toWarehouseId], references: [id])
+  items         StockTransferItem[]
+
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([status])
+}
+
+model StockTransferItem {
+  id         Int @id @default(autoincrement())
+  transferId Int
+  productId  Int
+  quantity   Int
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id])
+  product  Product       @relation(fields: [productId], references: [id])
+
+  @@unique([transferId, productId])
+  @@index([productId])
+}
+
+enum PurchaseRequisitionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model PurchaseRequisition {
+  id                Int                       @id @default(autoincrement())
+  requisitionNumber String                    @unique
+  requesterName     String
+  supplierId        Int?
+  status            PurchaseRequisitionStatus @default(DRAFT)
+  notes             String?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  supplier       Supplier?                 @relation(fields: [supplierId], references: [id])
+  items          PurchaseRequisitionItem[]
+  purchaseOrders PurchaseOrder[]
+
+  @@index([supplierId])
+  @@index([status])
+}
+
+model PurchaseRequisitionItem {
+  id                 Int     @id @default(autoincrement())
+  requisitionId      Int
+  productId          Int
+  quantity           Int
+  estimatedUnitPrice Decimal @db.Decimal(12, 2)
+
+  requisition PurchaseRequisition @relation(fields: [requisitionId], references: [id])
+  product     Product             @relation(fields: [productId], references: [id])
+
+  @@index([requisitionId])
+  @@index([productId])
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id            Int                 @id @default(autoincrement())
+  poNumber      String              @unique
+  supplierId    Int
+  requisitionId Int?
+  status        PurchaseOrderStatus @default(DRAFT)
+  orderDate     DateTime            @default(now())
+  expectedDate  DateTime?
+  notes         String?
+  subtotal      Decimal             @db.Decimal(14, 2)
+  taxAmount     Decimal             @default(0) @db.Decimal(14, 2)
+  totalAmount   Decimal             @db.Decimal(14, 2)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  supplier      Supplier             @relation(fields: [supplierId], references: [id])
+  requisition   PurchaseRequisition? @relation(fields: [requisitionId], references: [id])
+  items         PurchaseOrderItem[]
+  goodsReceipts GoodsReceipt[]
+  invoices      PurchaseInvoice[]
+
+  @@index([supplierId])
+  @@index([requisitionId])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id               Int     @id @default(autoincrement())
+  purchaseOrderId  Int
+  productId        Int
+  quantity         Int
+  receivedQuantity Int     @default(0)
+  unitPrice        Decimal @db.Decimal(12, 2)
+  lineTotal        Decimal @db.Decimal(14, 2)
+
+  purchaseOrder     PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  product           Product            @relation(fields: [productId], references: [id])
+  goodsReceiptItems GoodsReceiptItem[]
+
+  @@unique([purchaseOrderId, productId])
+  @@index([productId])
+}
+
+enum GoodsReceiptStatus {
+  RECEIVED
+  CANCELLED
+}
+
+model GoodsReceipt {
+  id              Int                @id @default(autoincrement())
+  receiptNumber   String             @unique
+  purchaseOrderId Int
+  warehouseId     Int
+  status          GoodsReceiptStatus @default(RECEIVED)
+  receiptDate     DateTime           @default(now())
+  notes           String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  warehouse     Warehouse          @relation(fields: [warehouseId], references: [id])
+  items         GoodsReceiptItem[]
+
+  @@index([purchaseOrderId])
+  @@index([warehouseId])
+  @@index([status])
+}
+
+model GoodsReceiptItem {
+  id                  Int @id @default(autoincrement())
+  goodsReceiptId      Int
+  purchaseOrderItemId Int
+  productId           Int
+  quantity            Int
+
+  goodsReceipt      GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id])
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+  product           Product           @relation(fields: [productId], references: [id])
+
+  @@index([goodsReceiptId])
+  @@index([purchaseOrderItemId])
+  @@index([productId])
+}
+
+enum PurchaseInvoiceStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+model PurchaseInvoice {
+  id              Int                   @id @default(autoincrement())
+  invoiceNumber   String                @unique
+  supplierId      Int
+  purchaseOrderId Int?
+  status          PurchaseInvoiceStatus @default(UNPAID)
+  invoiceDate     DateTime              @default(now())
+  dueDate         DateTime?
+  subtotal        Decimal               @db.Decimal(14, 2)
+  taxAmount       Decimal               @default(0) @db.Decimal(14, 2)
+  totalAmount     Decimal               @db.Decimal(14, 2)
+  paidAmount      Decimal               @default(0) @db.Decimal(14, 2)
+  notes           String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  supplier      Supplier              @relation(fields: [supplierId], references: [id])
+  purchaseOrder PurchaseOrder?        @relation(fields: [purchaseOrderId], references: [id])
+  items         PurchaseInvoiceItem[]
+
+  @@index([supplierId])
+  @@index([purchaseOrderId])
+  @@index([status])
+}
+
+model PurchaseInvoiceItem {
+  id                Int     @id @default(autoincrement())
+  purchaseInvoiceId Int
+  productId         Int
+  quantity          Int
+  unitPrice         Decimal @db.Decimal(12, 2)
+  lineTotal         Decimal @db.Decimal(14, 2)
+
+  purchaseInvoice PurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id])
+  product         Product         @relation(fields: [productId], references: [id])
+
+  @@index([purchaseInvoiceId])
+  @@index([productId])
+}
