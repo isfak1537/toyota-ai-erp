@@ -119,13 +119,13 @@ Keep `npm test` passing.
   residuals); rules R1-R5 + an Isolation Forest risk score with a weekly review queue (top 10 per local week, top contributing features), evaluated against `anomaly-labels.json`; model registry
   with deterministic versions; notebooks and `ai-service/REPORT.md`. The ERP API does not call it yet (P4).
 - P2 + P3 passed their gate and are merged and tagged `m3-ai-models` (live end-to-end run through the read-only role: green).
-- P4 + P5 (ERP AI module, auth, LLM layer) are built on branch `phase-4-ai-erp` and wait for the owner's confirmation:
+- P4 + P5 (ERP AI module, auth, LLM layer) passed their gate (live check on dev, 2 Nov 2026) and are merged and tagged `m4-ai-erp`:
   JWT login with 4 roles and `requireRole` on every route (matrix in SRS 9), actors recorded on stock and approval actions,
   `destinationWarehouseId` on requisition/PO headers, `reservedAfter` on the ledger (reconcile checks it), `ai.client`
   (shared secret, timeouts, 503 when the AI service is down), replenishment (AI-004..006), atomic and idempotent approve
   (AI-007, parallel double-approve test), anomaly flags with separate rule-hit and review-queue lists, model runs and retrain,
   LLM explanations (Groq primary, Gemini fallback, Ollama local; cached; `null` on any failure; 20/min and 800/day caps),
-  and a read-only assistant (fixed tool registry, tests prove no write tool).
+  and a read-only assistant (fixed tool registry incl. days of cover, tests prove no write tool). Background explanations use at most half of the per-minute LLM budget.
 - Next: P6 (React UI). Update this section when a phase gate passes.
 
 ### Pending verification
@@ -147,6 +147,7 @@ Keep `npm test` passing.
   `npm run seed:synthetic -- --apply --replace` to refill the synthetic data with it.
 - `routes/category.routes.js` exists but is not mounted in `app.js` (categories have no API); mount it behind the master-data role if the UI needs it.
 - LLM daily cap counts audit rows (shared across instances); the per-minute window is per process.
+- Seed NEAR_ROP products sit near the seed `reorderLevel`, which is about 1.5x the AI reorder point (the seed uses the weekday base rate; the forecast uses recent average demand), so the AI suggests nothing for them. Open owner decision, see the P4 report: options are leaving it, a model-independent `reorderLevel` in the seed, or draining stock at demo time.
 - Two unexplained flaky runs of the Node suite were seen (one earlier, one in P4: failures in the route-access and transfer-pagination tests, green on the next runs). To capture one: `cd server && npm run test:loop -- 30` (add `--stop` to end at the first failure). Failing output goes to `~/erp-flaky-logs/<timestamp>-run<N>.log` with the commit, load and other node processes; send me that file.
 - The seed bulk-inserts back-dated stock history directly, bypassing the inventory service (the
   service cannot back-date). It is the one documented exception to "stock changes only through the
