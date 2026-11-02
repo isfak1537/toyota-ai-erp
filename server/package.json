@@ -8,7 +8,8 @@
     "db:seed": "node prisma/seed.js",
     "test": "jest --runInBand",
     "test:unit": "jest --selectProjects unit",
-    "test:integration": "jest --selectProjects integration --runInBand"
+    "test:integration": "jest --selectProjects integration --runInBand",
+    "seed:synthetic": "node prisma/seed/generate.js"
   },
   "jest": {
     "projects": [
