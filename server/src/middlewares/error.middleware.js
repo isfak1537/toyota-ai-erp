@@ -1,5 +1,6 @@
 const { ZodError } = require("zod");
 const { AppError } = require("../errors/app-error");
+const { fieldDetails } = require("../utils/zod-details");
 
 // Classic engine reports meta.target (array of fields). With @prisma/adapter-pg
 // meta.target is absent; the constraint name ("Product_sku_key") is under
@@ -39,17 +40,6 @@ const uniqueViolationMessage = (fields) => {
   return "A record with the same unique value already exists";
 };
 
-const zodDetails = (error) =>
-  error.issues.reduce((acc, issue) => {
-    const field = issue.path.join(".");
-
-    if (field && !(field in acc)) {
-      acc[field] = issue.message;
-    }
-
-    return acc;
-  }, {});
-
 const errorMiddleware = (err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
@@ -70,7 +60,7 @@ const errorMiddleware = (err, req, res, next) => {
   }
 
   if (err instanceof ZodError) {
-    return respond(400, "Validation failed", zodDetails(err));
+    return respond(400, "Validation failed", fieldDetails(err.issues));
   }
 
   if (err?.code === "P2002") {

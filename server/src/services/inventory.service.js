@@ -84,6 +84,10 @@ const createInventory = async (data) => {
     throw new ValidationError("Quantity cannot be negative");
   }
 
+  if (reservedQuantity > quantity) {
+    throw new ValidationError("Reserved quantity cannot be greater than quantity");
+  }
+
   return prisma.$transaction(async (tx) => {
     await validateProductAndWarehouse(tx, productId, warehouseId);
 

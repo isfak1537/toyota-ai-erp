@@ -1,21 +1,14 @@
 const { ValidationError } = require("../errors/app-error");
+const { fieldDetails } = require("../utils/zod-details");
 
 const validate = (schema) => {
   return (req, res, next) => {
-    const result = schema.safeParse(req.body);
+    const result = schema.safeParse(req.body ?? {});
 
     if (!result.success) {
-      const details = result.error.issues.reduce((acc, issue) => {
-        const field = issue.path[0];
-
-        if (field) {
-          acc[field] = issue.message;
-        }
-
-        return acc;
-      }, {});
-
-      return next(new ValidationError("Validation failed", details));
+      return next(
+        new ValidationError("Validation failed", fieldDetails(result.error.issues))
+      );
     }
 
     req.body = result.data;

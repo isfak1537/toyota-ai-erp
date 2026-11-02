@@ -12,11 +12,7 @@ const parseId = (value) => {
 };
 
 const createInventory = async (req, res) => {
-  const data = await inventoryService.createInventory({
-    ...req.body,
-    productId: parseId(req.body.productId),
-    warehouseId: parseId(req.body.warehouseId),
-  });
+  const data = await inventoryService.createInventory(req.body);
 
   res.status(201).json({
     success: true,
@@ -70,15 +66,7 @@ const deleteInventory = async (req, res) => {
 };
 
 const receiveStock = async (req, res) => {
-  const data = await inventoryService.receiveStock({
-    ...req.body,
-    productId: parseId(req.body.productId),
-    warehouseId: parseId(req.body.warehouseId),
-    quantity: Number(req.body.quantity),
-    referenceId: req.body.referenceId
-      ? Number(req.body.referenceId)
-      : undefined,
-  });
+  const data = await inventoryService.receiveStock(req.body);
 
   res.status(201).json({
     success: true,
@@ -88,15 +76,7 @@ const receiveStock = async (req, res) => {
 };
 
 const issueStock = async (req, res) => {
-  const data = await inventoryService.issueStock({
-    ...req.body,
-    productId: parseId(req.body.productId),
-    warehouseId: parseId(req.body.warehouseId),
-    quantity: Number(req.body.quantity),
-    referenceId: req.body.referenceId
-      ? Number(req.body.referenceId)
-      : undefined,
-  });
+  const data = await inventoryService.issueStock(req.body);
 
   res.status(201).json({
     success: true,
@@ -106,15 +86,7 @@ const issueStock = async (req, res) => {
 };
 
 const adjustStock = async (req, res) => {
-  const data = await inventoryService.adjustStock({
-    ...req.body,
-    productId: parseId(req.body.productId),
-    warehouseId: parseId(req.body.warehouseId),
-    quantity: Number(req.body.quantity),
-    referenceId: req.body.referenceId
-      ? Number(req.body.referenceId)
-      : undefined,
-  });
+  const data = await inventoryService.adjustStock(req.body);
 
   res.status(201).json({
     success: true,
@@ -124,15 +96,7 @@ const adjustStock = async (req, res) => {
 };
 
 const reserveStock = async (req, res) => {
-  const data = await inventoryService.reserveStock({
-    ...req.body,
-    productId: parseId(req.body.productId),
-    warehouseId: parseId(req.body.warehouseId),
-    quantity: Number(req.body.quantity),
-    referenceId: req.body.referenceId
-      ? Number(req.body.referenceId)
-      : undefined,
-  });
+  const data = await inventoryService.reserveStock(req.body);
 
   res.status(201).json({
     success: true,
@@ -142,15 +106,7 @@ const reserveStock = async (req, res) => {
 };
 
 const releaseStock = async (req, res) => {
-  const data = await inventoryService.releaseStock({
-    ...req.body,
-    productId: parseId(req.body.productId),
-    warehouseId: parseId(req.body.warehouseId),
-    quantity: Number(req.body.quantity),
-    referenceId: req.body.referenceId
-      ? Number(req.body.referenceId)
-      : undefined,
-  });
+  const data = await inventoryService.releaseStock(req.body);
 
   res.status(201).json({
     success: true,

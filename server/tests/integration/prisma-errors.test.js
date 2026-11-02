@@ -81,7 +81,7 @@ describe("real Prisma error shapes", () => {
     expect(res.body).toEqual({ success: false, message: "Record not found" });
   });
 
-  it("PrismaClientValidationError: an unknown field maps to 400 without internals", async () => {
+  it("an unknown field is rejected by validation before it can reach Prisma", async () => {
     const s = await f.stockScenario({ quantity: 1 });
 
     const res = await request(app)
@@ -89,6 +89,7 @@ describe("real Prisma error shapes", () => {
       .send({ notAField: true });
 
     expect(res.status).toBe(400);
-    expect(res.body).toEqual({ success: false, message: "Invalid request data" });
+    expect(res.body.message).toBe("Validation failed");
+    expect(Object.keys(res.body.errors)).toEqual(["notAField"]);
   });
 });

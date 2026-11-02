@@ -12,12 +12,7 @@ const parseId = (value) => {
 };
 
 const completeTransfer = async (req, res) => {
-  const data = await stockTransferService.completeTransfer({
-    fromWarehouseId: Number(req.body.fromWarehouseId),
-    toWarehouseId: Number(req.body.toWarehouseId),
-    items: req.body.items,
-    notes: req.body.notes,
-  });
+  const data = await stockTransferService.completeTransfer(req.body);
 
   res.status(201).json({
     success: true,
