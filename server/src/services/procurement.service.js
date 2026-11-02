@@ -1,4 +1,9 @@
 const prisma = require("../config/prisma");
+const {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} = require("../errors/app-error");
 
 const makeNumber = (prefix) => {
   return `${prefix}-${Date.now()}-${Math.floor(
@@ -10,7 +15,7 @@ const toId = (value, fieldName) => {
   const id = Number(value);
 
   if (!Number.isInteger(id) || id <= 0) {
-    throw new Error(`${fieldName} must be a valid positive integer`);
+    throw new ValidationError(`${fieldName} must be a valid positive integer`);
   }
 
   return id;
@@ -20,7 +25,7 @@ const toPositiveInteger = (value, fieldName) => {
   const number = Number(value);
 
   if (!Number.isInteger(number) || number <= 0) {
-    throw new Error(`${fieldName} must be a positive integer`);
+    throw new ValidationError(`${fieldName} must be a positive integer`);
   }
 
   return number;
@@ -30,7 +35,7 @@ const toMoney = (value, fieldName = "amount") => {
   const number = Number(value);
 
   if (!Number.isFinite(number) || number < 0) {
-    throw new Error(`${fieldName} must be a valid non-negative number`);
+    throw new ValidationError(`${fieldName} must be a valid non-negative number`);
   }
 
   return Number(number.toFixed(2));
@@ -44,7 +49,7 @@ const toDateOrNull = (value, fieldName) => {
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    throw new Error(`${fieldName} must be a valid date`);
+    throw new ValidationError(`${fieldName} must be a valid date`);
   }
 
   return date;
@@ -74,11 +79,11 @@ const createRequisition = async (data) => {
   } = data;
 
   if (!requesterName?.trim()) {
-    throw new Error("requesterName is required");
+    throw new ValidationError("requesterName is required");
   }
 
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error("At least one requisition item is required");
+    throw new ValidationError("At least one requisition item is required");
   }
 
   const parsedSupplierId =
@@ -97,7 +102,7 @@ const createRequisition = async (data) => {
     });
 
     if (!supplier) {
-      throw new Error("Active supplier not found");
+      throw new NotFoundError("Active supplier not found");
     }
   }
 
@@ -118,7 +123,7 @@ const createRequisition = async (data) => {
     );
 
     if (productIds.has(productId)) {
-      throw new Error(
+      throw new ValidationError(
         `Product ${productId} appears more than once in the requisition`
       );
     }
@@ -133,7 +138,7 @@ const createRequisition = async (data) => {
     });
 
     if (!product) {
-      throw new Error(
+      throw new NotFoundError(
         `Active product not found: ${productId}`
       );
     }
@@ -195,11 +200,11 @@ const submitRequisition = async (id) => {
     });
 
   if (!requisition) {
-    throw new Error("Purchase requisition not found");
+    throw new NotFoundError("Purchase requisition not found");
   }
 
   if (requisition.status !== "DRAFT") {
-    throw new Error(
+    throw new ConflictError(
       "Only DRAFT requisitions can be submitted"
     );
   }
@@ -233,11 +238,11 @@ const approveRequisition = async (id) => {
     });
 
   if (!requisition) {
-    throw new Error("Purchase requisition not found");
+    throw new NotFoundError("Purchase requisition not found");
   }
 
   if (requisition.status !== "SUBMITTED") {
-    throw new Error(
+    throw new ConflictError(
       "Only SUBMITTED requisitions can be approved"
     );
   }
@@ -276,7 +281,7 @@ const createPurchaseOrder = async (data) => {
   );
 
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error("At least one purchase order item is required");
+    throw new ValidationError("At least one purchase order item is required");
   }
 
   const supplier = await prisma.supplier.findFirst({
@@ -287,7 +292,7 @@ const createPurchaseOrder = async (data) => {
   });
 
   if (!supplier) {
-    throw new Error("Active supplier not found");
+    throw new NotFoundError("Active supplier not found");
   }
 
   let requisition = null;
@@ -313,11 +318,11 @@ const createPurchaseOrder = async (data) => {
       });
 
     if (!requisition) {
-      throw new Error("Purchase requisition not found");
+      throw new NotFoundError("Purchase requisition not found");
     }
 
     if (requisition.status !== "APPROVED") {
-      throw new Error(
+      throw new ConflictError(
         "Purchase order can only be created from an APPROVED requisition"
       );
     }
@@ -326,7 +331,7 @@ const createPurchaseOrder = async (data) => {
       requisition.supplierId &&
       requisition.supplierId !== parsedSupplierId
     ) {
-      throw new Error(
+      throw new ValidationError(
         "Purchase order supplier does not match the requisition supplier"
       );
     }
@@ -349,7 +354,7 @@ const createPurchaseOrder = async (data) => {
     );
 
     if (productIds.has(productId)) {
-      throw new Error(
+      throw new ValidationError(
         `Product ${productId} appears more than once in the purchase order`
       );
     }
@@ -364,7 +369,7 @@ const createPurchaseOrder = async (data) => {
     });
 
     if (!product) {
-      throw new Error(
+      throw new NotFoundError(
         `Active product not found: ${productId}`
       );
     }
@@ -376,13 +381,13 @@ const createPurchaseOrder = async (data) => {
         );
 
       if (!requisitionItem) {
-        throw new Error(
+        throw new ValidationError(
           `Product ${productId} does not exist in the approved requisition`
         );
       }
 
       if (quantity > requisitionItem.quantity) {
-        throw new Error(
+        throw new ValidationError(
           `Purchase order quantity for product ${productId} cannot exceed requisition quantity`
         );
       }
@@ -473,11 +478,11 @@ const approvePurchaseOrder = async (id) => {
     });
 
   if (!purchaseOrder) {
-    throw new Error("Purchase order not found");
+    throw new NotFoundError("Purchase order not found");
   }
 
   if (purchaseOrder.status !== "PENDING_APPROVAL") {
-    throw new Error(
+    throw new ConflictError(
       "Only PENDING_APPROVAL purchase orders can be approved"
     );
   }
@@ -520,7 +525,7 @@ const createGoodsReceipt = async (data) => {
   );
 
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error(
+    throw new ValidationError(
       "At least one goods receipt item is required"
     );
   }
@@ -536,7 +541,7 @@ const createGoodsReceipt = async (data) => {
     });
 
   if (!purchaseOrder) {
-    throw new Error("Purchase order not found");
+    throw new NotFoundError("Purchase order not found");
   }
 
   if (
@@ -544,7 +549,7 @@ const createGoodsReceipt = async (data) => {
       purchaseOrder.status
     )
   ) {
-    throw new Error(
+    throw new ConflictError(
       "Goods receipt requires an APPROVED or PARTIALLY_RECEIVED purchase order"
     );
   }
@@ -557,7 +562,7 @@ const createGoodsReceipt = async (data) => {
   });
 
   if (!warehouse) {
-    throw new Error("Active warehouse not found");
+    throw new NotFoundError("Active warehouse not found");
   }
 
   const receiptProductIds = new Set();
@@ -584,19 +589,19 @@ const createGoodsReceipt = async (data) => {
     );
 
     if (!poItem) {
-      throw new Error(
+      throw new NotFoundError(
         `Purchase order item not found: ${purchaseOrderItemId}`
       );
     }
 
     if (poItem.productId !== productId) {
-      throw new Error(
+      throw new ValidationError(
         `Product mismatch for purchase order item ${purchaseOrderItemId}`
       );
     }
 
     if (receiptProductIds.has(productId)) {
-      throw new Error(
+      throw new ValidationError(
         `Product ${productId} appears more than once in the goods receipt`
       );
     }
@@ -607,13 +612,13 @@ const createGoodsReceipt = async (data) => {
       poItem.quantity - poItem.receivedQuantity;
 
     if (remainingQuantity <= 0) {
-      throw new Error(
+      throw new ConflictError(
         `Purchase order item ${purchaseOrderItemId} has already been fully received`
       );
     }
 
     if (quantity > remainingQuantity) {
-      throw new Error(
+      throw new ConflictError(
         `Cannot receive ${quantity}. Remaining quantity for PO item ${purchaseOrderItemId} is ${remainingQuantity}`
       );
     }
@@ -794,11 +799,11 @@ const createPurchaseInvoice = async (data) => {
   );
 
   if (!invoiceNumber?.trim()) {
-    throw new Error("invoiceNumber is required");
+    throw new ValidationError("invoiceNumber is required");
   }
 
   if (!Array.isArray(items) || items.length === 0) {
-    throw new Error(
+    throw new ValidationError(
       "At least one purchase invoice item is required"
     );
   }
@@ -810,7 +815,7 @@ const createPurchaseInvoice = async (data) => {
   });
 
   if (!supplier) {
-    throw new Error("Supplier not found");
+    throw new NotFoundError("Supplier not found");
   }
 
   let purchaseOrder = null;
@@ -836,19 +841,19 @@ const createPurchaseInvoice = async (data) => {
       });
 
     if (!purchaseOrder) {
-      throw new Error("Purchase order not found");
+      throw new NotFoundError("Purchase order not found");
     }
 
     if (
       purchaseOrder.supplierId !== parsedSupplierId
     ) {
-      throw new Error(
+      throw new ValidationError(
         "Invoice supplier does not match purchase order supplier"
       );
     }
 
     if (purchaseOrder.status === "CANCELLED") {
-      throw new Error(
+      throw new ConflictError(
         "Cannot create invoice for a cancelled purchase order"
       );
     }
@@ -874,7 +879,7 @@ const createPurchaseInvoice = async (data) => {
     );
 
     if (productIds.has(productId)) {
-      throw new Error(
+      throw new ValidationError(
         `Product ${productId} appears more than once in the invoice`
       );
     }
@@ -889,7 +894,7 @@ const createPurchaseInvoice = async (data) => {
     });
 
     if (!product) {
-      throw new Error(
+      throw new NotFoundError(
         `Active product not found: ${productId}`
       );
     }
@@ -900,13 +905,13 @@ const createPurchaseInvoice = async (data) => {
       );
 
       if (!poItem) {
-        throw new Error(
+        throw new ValidationError(
           `Product ${productId} does not exist in the purchase order`
         );
       }
 
       if (quantity > poItem.quantity) {
-        throw new Error(
+        throw new ValidationError(
           `Invoice quantity for product ${productId} cannot exceed purchase order quantity`
         );
       }
@@ -935,7 +940,7 @@ const createPurchaseInvoice = async (data) => {
   );
 
   if (parsedPaidAmount > totals.totalAmount) {
-    throw new Error(
+    throw new ValidationError(
       "paidAmount cannot exceed invoice totalAmount"
     );
   }
