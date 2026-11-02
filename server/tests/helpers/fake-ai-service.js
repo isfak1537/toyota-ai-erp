@@ -15,14 +15,14 @@ const startFakeAiService = async () => {
     down: false,
   };
 
-  const forecastFor = (productId, warehouseId) => {
+  const forecastFor = (productId, warehouseId, horizon = 30) => {
     const found = state.forecasts.get(`${productId}:${warehouseId}`);
 
     if (!found) {
       return { productId, warehouseId, status: "NO_HISTORY", message: "No ledger history for this product and warehouse" };
     }
 
-    const days = Array.from({ length: 30 }, (_, i) => ({ date: `2026-11-${String(i + 1).padStart(2, "0")}`, mean: found.dailyMean, baseline: found.dailyMean, ml: found.dailyMean, sigma: found.sigma }));
+    const days = Array.from({ length: horizon }, (_, i) => ({ date: `2026-11-${String(i + 1).padStart(2, "0")}`, mean: found.dailyMean, baseline: found.dailyMean, ml: found.dailyMean, sigma: found.sigma }));
 
     return {
       productId,
@@ -63,7 +63,7 @@ const startFakeAiService = async () => {
           modelVersion: state.modelVersion,
           asOf: "2026-11-01",
           horizonDays: body.horizonDays,
-          results: body.series.map((s) => forecastFor(s.productId, s.warehouseId)),
+          results: body.series.map((s) => forecastFor(s.productId, s.warehouseId, body.horizonDays)),
         });
       }
 

@@ -4,6 +4,7 @@ const suggestions = require("../modules/ai/suggestion.service");
 const anomalies = require("../modules/ai/anomaly.service");
 const models = require("../modules/ai/models.service");
 const explain = require("../modules/ai/llm/explain");
+const assistant = require("../modules/ai/assistant/assistant.service");
 const { NotFoundError } = require("../errors/app-error");
 const { parseId } = require("../utils/ids");
 const { parsePagination, toPagination } = require("../utils/pagination");
@@ -137,7 +138,14 @@ const explainAnomaly = async (req, res) => {
   sendExplanation(res, await explain.explainAnomaly(id, req.user.id));
 };
 
+const ask = async (req, res) => {
+  const data = await assistant.ask(req.body.question, req.user);
+
+  res.json({ success: true, message: data.unavailable ? "The assistant is unavailable right now" : "OK", data });
+};
+
 module.exports = {
+  ask,
   explainSuggestion,
   explainAnomaly,
   listModels,

@@ -4,7 +4,7 @@ const controller = require("../controllers/ai.controller");
 const validate = require("../middlewares/validate.middleware");
 const { requireRole } = require("../middlewares/auth.middleware");
 const roles = require("../middlewares/roles");
-const { runReplenishmentSchema, approveSuggestionSchema, rejectSuggestionSchema, syncAnomaliesSchema, reviewAnomalySchema, retrainSchema } = require("../validators/ai.validator");
+const { runReplenishmentSchema, approveSuggestionSchema, rejectSuggestionSchema, syncAnomaliesSchema, reviewAnomalySchema, retrainSchema, askSchema } = require("../validators/ai.validator");
 
 const router = express.Router();
 
@@ -23,5 +23,8 @@ router.post("/anomalies/:id/review", requireRole(...roles.ANOMALY_REVIEW), valid
 router.get("/forecast/:productId", controller.productForecast);
 router.get("/models", controller.listModels);
 router.post("/models/retrain", requireRole(...roles.ADMIN_ONLY), validate(retrainSchema), controller.retrainModels);
+
+// read-only assistant: open to every authenticated role
+router.post("/ask", validate(askSchema), controller.ask);
 
 module.exports = router;

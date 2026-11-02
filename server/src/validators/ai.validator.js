@@ -67,7 +67,12 @@ const forecastQuery = z.object({
   horizonDays: z.coerce.number().int().min(1).max(30).optional().default(30),
 });
 
+const askSchema = z.strictObject({
+  question: z.string().trim().min(1, "question is required").max(500, "question must be at most 500 characters"),
+});
+
 module.exports = {
+  askSchema,
   retrainSchema,
   listModelsQuery,
   forecastQuery,
