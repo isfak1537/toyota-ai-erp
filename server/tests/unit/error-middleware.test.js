@@ -2,13 +2,13 @@ const express = require("express");
 const request = require("supertest");
 const { z } = require("zod");
 
-const errorMiddleware = require("../src/middlewares/error.middleware");
-const validate = require("../src/middlewares/validate.middleware");
+const errorMiddleware = require("../../src/middlewares/error.middleware");
+const validate = require("../../src/middlewares/validate.middleware");
 const {
   ConflictError,
   NotFoundError,
   ValidationError,
-} = require("../src/errors/app-error");
+} = require("../../src/errors/app-error");
 
 const buildApp = (register) => {
   const app = express();
