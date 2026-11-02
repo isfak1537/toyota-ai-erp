@@ -285,31 +285,46 @@ const createPurchaseOrder = async (data) => {
     throw new ValidationError("At least one purchase order item is required");
   }
 
-  const supplier = await prisma.supplier.findFirst({
-    where: {
-      id: parsedSupplierId,
-      isActive: true,
-    },
-  });
-
-  if (!supplier) {
-    throw new NotFoundError("Active supplier not found");
-  }
-
-  let requisition = null;
-
-  if (
+  const hasRequisition =
     requisitionId !== undefined &&
     requisitionId !== null &&
-    requisitionId !== ""
-  ) {
-    const parsedRequisitionId = toId(
-      requisitionId,
-      "requisitionId"
-    );
+    requisitionId !== "";
 
-    requisition =
-      await prisma.purchaseRequisition.findUnique({
+  const parsedRequisitionId = hasRequisition
+    ? toId(requisitionId, "requisitionId")
+    : null;
+
+  return prisma.$transaction(async (tx) => {
+    const supplier = await tx.supplier.findFirst({
+      where: {
+        id: parsedSupplierId,
+        isActive: true,
+      },
+    });
+
+    if (!supplier) {
+      throw new NotFoundError("Active supplier not found");
+    }
+
+    let requisition = null;
+    const committedByProduct = new Map();
+
+    if (parsedRequisitionId) {
+      // Lock the requisition first. PO creation per requisition is then
+      // serialised, so the cumulative quantity check below sees every earlier
+      // PO (a sum over other rows cannot be guarded by a single conditional
+      // update). Nothing else takes this lock while holding another one.
+      const locked = await tx.$queryRaw`
+        SELECT "id" FROM "PurchaseRequisition"
+        WHERE "id" = ${parsedRequisitionId}::int
+        FOR UPDATE
+      `;
+
+      if (locked.length === 0) {
+        throw new NotFoundError("Purchase requisition not found");
+      }
+
+      requisition = await tx.purchaseRequisition.findUnique({
         where: {
           id: parsedRequisitionId,
         },
@@ -318,132 +333,158 @@ const createPurchaseOrder = async (data) => {
         },
       });
 
-    if (!requisition) {
-      throw new NotFoundError("Purchase requisition not found");
-    }
-
-    if (requisition.status !== "APPROVED") {
-      throw new ConflictError(
-        "Purchase order can only be created from an APPROVED requisition"
-      );
-    }
-
-    if (
-      requisition.supplierId &&
-      requisition.supplierId !== parsedSupplierId
-    ) {
-      throw new ValidationError(
-        "Purchase order supplier does not match the requisition supplier"
-      );
-    }
-  }
-
-  const productIds = new Set();
-  const purchaseOrderItems = [];
-
-  for (const item of items) {
-    const productId = toId(item.productId, "productId");
-
-    const quantity = toPositiveInteger(
-      item.quantity,
-      "quantity"
-    );
-
-    const unitPrice = toMoney(
-      item.unitPrice,
-      "unitPrice"
-    );
-
-    if (productIds.has(productId)) {
-      throw new ValidationError(
-        `Product ${productId} appears more than once in the purchase order`
-      );
-    }
-
-    productIds.add(productId);
-
-    const product = await prisma.product.findFirst({
-      where: {
-        id: productId,
-        isActive: true,
-      },
-    });
-
-    if (!product) {
-      throw new NotFoundError(
-        `Active product not found: ${productId}`
-      );
-    }
-
-    if (requisition) {
-      const requisitionItem =
-        requisition.items.find(
-          (item) => item.productId === productId
-        );
-
-      if (!requisitionItem) {
-        throw new ValidationError(
-          `Product ${productId} does not exist in the approved requisition`
+      if (requisition.status !== "APPROVED") {
+        throw new ConflictError(
+          "Purchase order can only be created from an APPROVED requisition"
         );
       }
 
-      if (quantity > requisitionItem.quantity) {
+      if (
+        requisition.supplierId &&
+        requisition.supplierId !== parsedSupplierId
+      ) {
         throw new ValidationError(
-          `Purchase order quantity for product ${productId} cannot exceed requisition quantity`
+          "Purchase order supplier does not match the requisition supplier"
         );
+      }
+
+      const committed = await tx.purchaseOrderItem.groupBy({
+        by: ["productId"],
+        where: {
+          purchaseOrder: {
+            requisitionId: parsedRequisitionId,
+            status: { not: "CANCELLED" },
+          },
+        },
+        _sum: {
+          quantity: true,
+        },
+      });
+
+      for (const row of committed) {
+        committedByProduct.set(row.productId, row._sum.quantity ?? 0);
       }
     }
 
-    const lineTotal = lineTotalOf(quantity, unitPrice);
+    const productIds = new Set();
+    const purchaseOrderItems = [];
 
-    purchaseOrderItems.push({
-      productId,
-      quantity,
-      receivedQuantity: 0,
-      unitPrice,
-      lineTotal,
-    });
-  }
+    for (const item of items) {
+      const productId = toId(item.productId, "productId");
 
-  const totals = calculateTotals(
-    purchaseOrderItems,
-    taxAmount
-  );
+      const quantity = toPositiveInteger(
+        item.quantity,
+        "quantity"
+      );
 
-  const parsedExpectedDate = toDateOrNull(
-    expectedDate,
-    "expectedDate"
-  );
+      const unitPrice = toMoney(
+        item.unitPrice,
+        "unitPrice"
+      );
 
-  return prisma.purchaseOrder.create({
-    data: {
-      poNumber: makeNumber("PO"),
-      supplierId: parsedSupplierId,
-      requisitionId: requisition
-        ? requisition.id
-        : null,
-      status: "PENDING_APPROVAL",
-      expectedDate: parsedExpectedDate,
-      notes: notes || null,
-      subtotal: totals.subtotal,
-      taxAmount: totals.taxAmount,
-      totalAmount: totals.totalAmount,
-      items: {
-        create: purchaseOrderItems,
-      },
-    },
-    include: {
-      supplier: true,
-      requisition: true,
-      items: {
-        include: {
-          product: true,
+      if (productIds.has(productId)) {
+        throw new ValidationError(
+          `Product ${productId} appears more than once in the purchase order`
+        );
+      }
+
+      productIds.add(productId);
+
+      const product = await tx.product.findFirst({
+        where: {
+          id: productId,
+          isActive: true,
+        },
+      });
+
+      if (!product) {
+        throw new NotFoundError(
+          `Active product not found: ${productId}`
+        );
+      }
+
+      if (requisition) {
+        const requisitionItem =
+          requisition.items.find(
+            (line) => line.productId === productId
+          );
+
+        if (!requisitionItem) {
+          throw new ValidationError(
+            `Product ${productId} does not exist in the approved requisition`
+          );
+        }
+
+        if (quantity > requisitionItem.quantity) {
+          throw new ValidationError(
+            `Purchase order quantity for product ${productId} cannot exceed requisition quantity`
+          );
+        }
+
+        // Cumulative cap: non-cancelled POs of this requisition plus this one
+        // may not exceed the requisition quantity. Depends on other POs, so it
+        // is a state conflict (409), not a malformed request.
+        const remaining =
+          requisitionItem.quantity -
+          (committedByProduct.get(productId) ?? 0);
+
+        if (quantity > remaining) {
+          throw new ConflictError(
+            `Purchase order quantity for product ${productId} exceeds the remaining requisition quantity (${remaining})`
+          );
+        }
+      }
+
+      const lineTotal = lineTotalOf(quantity, unitPrice);
+
+      purchaseOrderItems.push({
+        productId,
+        quantity,
+        receivedQuantity: 0,
+        unitPrice,
+        lineTotal,
+      });
+    }
+
+    const totals = calculateTotals(
+      purchaseOrderItems,
+      taxAmount
+    );
+
+    const parsedExpectedDate = toDateOrNull(
+      expectedDate,
+      "expectedDate"
+    );
+
+    return tx.purchaseOrder.create({
+      data: {
+        poNumber: makeNumber("PO"),
+        supplierId: parsedSupplierId,
+        requisitionId: requisition
+          ? requisition.id
+          : null,
+        status: "PENDING_APPROVAL",
+        expectedDate: parsedExpectedDate,
+        notes: notes || null,
+        subtotal: totals.subtotal,
+        taxAmount: totals.taxAmount,
+        totalAmount: totals.totalAmount,
+        items: {
+          create: purchaseOrderItems,
         },
       },
-    },
+      include: {
+        supplier: true,
+        requisition: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
   });
 };
-
 
 const getPurchaseOrders = async ({ skip = 0, take = 20 } = {}) => {
   const [items, total] = await prisma.$transaction([
