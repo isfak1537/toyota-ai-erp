@@ -283,5 +283,8 @@ def test_the_fixture_evaluation_covers_every_series_and_is_internally_consistent
     assert len(result.per_series) == 24 and result.skipped == []
     assert result.ml_series == 24
     s = result.summaries
-    assert s["selected"].macro_mae <= min(s["baseline"].macro_mae, s["ml"].macro_mae) + 1e-12
+    assert s["per_series_selection"].macro_mae <= min(s["baseline"].macro_mae, s["ml"].macro_mae) + 1e-12  # the old rule, by construction
+    assert s["policy"].macro_mae == pytest.approx(s["ml"].macro_mae)  # every fixture series has an ML forecast
+    assert s["policy"].macro_mae < s["baseline"].macro_mae  # on this data ML is better than the baseline overall
+    assert s["per_series_selection_nested"].macro_mae > s["policy"].macro_mae  # the evidence behind replacing the old rule
     assert all(np.isfinite(ev.sigma) and ev.sigma >= 0 for ev in result.per_series.values())

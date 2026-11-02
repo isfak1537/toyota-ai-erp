@@ -63,9 +63,11 @@ def forecast_notebook():
 
             **Protocol.** The last 14 days of every series are held out. The baseline window (7 or 14 days) is
             chosen on the training days only; the ML model is trained on days up to the day before the holdout
-            only; both forecast the full 14 days from that origin. Per series the model with the lower holdout
-            MAE is selected (AI-003). Because that choice is made on the same 14 noisy days it is scored on, a
-            **nested estimate** repeats the choice on the *earlier* 14 days and scores it on the untouched holdout.
+            only; both forecast the full 14 days from that origin. **AI-003 policy:** use the ML model for every series
+            with at least 28 days of history, the baseline otherwise. The notebook also keeps the *old* rule (the lower
+            holdout MAE per series) as a reference: because that choice is made on the same 14 noisy days it is scored on,
+            a **nested estimate** repeats it on the *earlier* 14 days and scores it on the untouched holdout, which is the
+            honest number and the reason the rule was replaced.
             """
         ),
         code(SETUP),
@@ -93,8 +95,9 @@ def forecast_notebook():
         code(
             """
             result = evaluate_forecasting(series)
-            names = {"baseline": "Moving average (baseline)", "ml": "ML (global model)", "selected": "Selected per series (AI-003)",
-                     "nested_selected": "Selected, nested estimate (honest)", "seasonal_naive": "Seasonal naive (reference)"}
+            names = {"baseline": "Moving average (baseline)", "policy": "AI-003 policy: ML from 28 days of history",
+                     "ml": "ML (global model), same here", "per_series_selection": "Old rule: lower MAE per series (optimistic)",
+                     "per_series_selection_nested": "Old rule, nested estimate (honest)", "seasonal_naive": "Seasonal naive (reference)"}
             overall = pd.DataFrame({names[k]: s.as_dict() for k, s in result.summaries.items()}).T
             overall = overall.rename(columns={"macro_mae": "MAE (mean of series)", "micro_mae": "MAE (pooled days)", "wape": "WAPE", "bias": "bias (forecast - actual)"}).drop(columns="series")
             print(f"holdout {result.holdout_start.date()} .. {result.holdout_end.date()}   |   {len(result.per_series)} series   |   ML available for {result.ml_series}   |   {result.model_samples:,} training samples")
@@ -104,11 +107,11 @@ def forecast_notebook():
         code(
             """
             s = result.summaries
-            b, m, sel, nested = s["baseline"].macro_mae, s["ml"].macro_mae, s["selected"].macro_mae, s["nested_selected"].macro_mae
-            print(f"ML cuts the baseline MAE by {100 * (1 - m / b):.1f}% ({b:.3f} -> {m:.3f}).")
-            print(f"The AI-003 'selected' figure ({sel:.3f}) is optimistic: choosing the winner per series on the same 14 days flatters it.")
-            print(f"The nested estimate ({nested:.3f}) is the honest accuracy of that selection policy: {100 * (1 - nested / b):.1f}% better than the baseline, "
-                  f"{'worse' if nested > m else 'better'} than simply always using ML ({m:.3f}).")
+            b, m, sel, nested = s["baseline"].macro_mae, s["policy"].macro_mae, s["per_series_selection"].macro_mae, s["per_series_selection_nested"].macro_mae
+            print(f"The AI-003 policy (ML from 28 days of history) cuts the baseline MAE by {100 * (1 - m / b):.1f}% ({b:.3f} -> {m:.3f}).")
+            print(f"The old rule's figure ({sel:.3f}) was optimistic: choosing the winner per series on the same 14 days flatters it.")
+            print(f"Its nested estimate ({nested:.3f}) is the honest accuracy of that rule: {100 * (1 - nested / b):.1f}% better than the baseline, "
+                  f"{'worse' if nested > m else 'better'} than the policy ({m:.3f}). That is why it was replaced.")
             print(f"WAPE is still {100 * s['ml'].wape:.0f}% for ML: at 1-14 units a day, most of the error is Poisson noise no model can remove.")
             print(f"ML bias is {s['ml'].bias:+.3f} units/day ({100 * s['ml'].bias / np.mean([e.actual.mean() for e in result.per_series.values()]):+.1f}% of mean demand): it slightly under-forecasts.")
             """
@@ -119,7 +122,7 @@ def forecast_notebook():
             rows = []
             for key, ev in result.per_series.items():
                 rows.append({"series": label(key), "window": ev.baseline_window, "MA7": ev.mae_ma7, "MA14": ev.mae_ma14, "baseline": ev.mae_baseline,
-                             "ML": ev.mae_ml, "selected": ev.selected, "nested": ev.nested_selected, "sigma": ev.sigma,
+                             "ML": ev.mae_ml, "old rule": ev.selected_by_mae, "old rule, nested": ev.nested_by_mae, "sigma": ev.sigma,
                              "steered": products[key[0]] in steered})
             per_series = pd.DataFrame(rows).sort_values("baseline", ascending=False).reset_index(drop=True)
 
@@ -146,9 +149,9 @@ def forecast_notebook():
         code(
             """
             print("Baseline window chosen on training days only:", per_series["window"].value_counts().sort_index().to_dict())
-            print(f"Selection: AI-003 picks ML for {result.selected_ml} series; the nested (honest) policy picks ML for {result.nested_selected_ml}.")
-            agree = (per_series["selected"] == per_series["nested"]).mean()
-            print(f"The two selections agree on only {100 * agree:.0f}% of series: with 14 noisy days, who 'wins' per series is largely luck.")
+            print(f"The policy uses ML for {result.selected_ml} series; the old rule would use it for {result.by_mae_ml}, and its nested (honest) version for {result.nested_by_mae_ml}.")
+            agree = (per_series["old rule"] == per_series["old rule, nested"]).mean()
+            print(f"The old rule and its nested version agree on only {100 * agree:.0f}% of series: with 14 noisy days, who 'wins' per series is unstable.")
             """
         ),
         md(
@@ -164,8 +167,8 @@ def forecast_notebook():
             """
             from app.forecasting.metrics import summarise
             keep = {k: ev for k, ev in result.per_series.items() if products[k[0]] not in steered}
-            pick = {"Baseline": lambda e: e.baseline, "ML": lambda e: e.ml_or_baseline, "Selected": lambda e: e.selected_forecast,
-                    "Selected, nested": lambda e: e.nested_forecast}
+            pick = {"Baseline": lambda e: e.baseline, "AI-003 policy (ML)": lambda e: e.selected_forecast, "Old rule": lambda e: e.by_mae_forecast,
+                    "Old rule, nested": lambda e: e.nested_forecast}
             table = pd.DataFrame({
                 name: {"all series": summarise({k: (e.actual, f(e)) for k, e in result.per_series.items()}).macro_mae,
                        f"without {len(result.per_series) - len(keep)} steered series": summarise({k: (e.actual, f(e)) for k, e in keep.items()}).macro_mae}
@@ -178,7 +181,7 @@ def forecast_notebook():
             ## 3. Forecasts for the two demo products
 
             Left: the holdout check (a forecast made the day before the grey band, compared with what happened).
-            Right: the production forecast for the next 30 days with the selected model's ±1.65σ band.
+            Right: the production forecast for the next 30 days with the policy model's ±1.65σ band.
             **The Cabin Air Filter is one of the steered products**: the generator shaped its last 12 days of demand to
             land a demo stock level, so its holdout is synthetic demand shaping, not natural demand. The Timing Belt
             Kit is the over-stocked demo product: low, lumpy demand, where a flat average is hard to beat.
@@ -224,7 +227,7 @@ def forecast_notebook():
                 right.plot(future["date"], future["ml"], color=ML, lw=2, label="ML")
                 chosen = future["mean"].to_numpy()
                 right.fill_between(future["date"], np.clip(chosen - 1.65 * answer["sigma"], 0, None), chosen + 1.65 * answer["sigma"], color=SELECTED, alpha=0.15,
-                                   label=f"selected ({answer['selectedModel']}) ± 1.65σ")
+                                   label=f"policy ({answer['selectedModel']}) ± 1.65σ")
                 right.axvline(history.index[-1], color="#999999", ls="--", lw=1)
                 right.set_title("Next 30 days (production forecast)")
                 right.legend(loc="upper left", fontsize=8)
@@ -233,7 +236,7 @@ def forecast_notebook():
                 fig.suptitle(title, fontweight="bold")
                 plt.tight_layout()
                 plt.show()
-                print(f"selected {answer['selectedModel']} | baseline window {answer['baselineWindow']} | mean {answer['dailyMean']:.1f}/day | sigma {answer['sigma']:.2f} | "
+                print(f"policy uses {answer['selectedModel']} | baseline window {answer['baselineWindow']} | mean {answer['dailyMean']:.1f}/day | sigma {answer['sigma']:.2f} | "
                       f"holdout MAE baseline {answer['metrics']['maeBaseline']:.2f}, ML {answer['metrics']['maeMl']:.2f}")
 
             show(list(demo)[0], list(demo.values())[0])
@@ -251,12 +254,12 @@ def forecast_notebook():
             * **Synthetic data.** Demand is Poisson noise around a weekday pattern and a trend. The model finding
               that structure is expected; real demand has promotions, stock-outs, returns and shocks.
             * **One 14-day holdout.** Per-series MAEs rest on 14 noisy points. The comparison across all series is
-              more reliable than any single series, and the nested estimate is the figure to quote for the selection policy.
+              more reliable than any single series; the nested estimate is the figure to quote for any per-series selection rule.
             * **Demand is observed issues.** When stock hits zero, no issue is recorded, so true demand is under-stated
               (censoring). The synthetic data has very few stock-outs; real data may not.
             * **No outlier cleaning.** The eight injected anomalies stay in the training series; with ~2,700 issues
               their effect is small, but it is not zero.
-            * **Sigma** is the RMSE of the selected model's 14 holdout residuals, floored at the Poisson spread. It is a
+            * **Sigma** is the RMSE of the policy model's 14 holdout residuals, floored at the Poisson spread. It is a
               rough, noisy estimate and feeds the safety stock (AI-004).
             """
         ),

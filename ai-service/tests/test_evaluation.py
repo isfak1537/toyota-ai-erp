@@ -11,6 +11,7 @@ from app.forecasting.evaluate import (
     choose,
     estimate_sigma,
     evaluate_forecasting,
+    policy_choice,
     seasonal_naive,
 )
 from app.versioning import to_jsonable
@@ -46,7 +47,15 @@ def evaluation():
     return data, evaluate_forecasting(data)
 
 
-# ---- selection (AI-003) -------------------------------------------------------
+# ---- the AI-003 policy ---------------------------------------------------------
+
+
+def test_the_policy_is_ml_whenever_the_series_is_long_enough_and_the_baseline_otherwise():
+    assert policy_choice(True) == ML
+    assert policy_choice(False) == BASELINE
+
+
+# ---- the OLD rule, kept as a reference ----------------------------------------
 
 
 def test_the_lower_holdout_mae_wins_and_ties_go_to_the_baseline():
@@ -103,7 +112,7 @@ def test_series_without_enough_history_are_skipped_or_fall_back(evaluation):
     assert (99, 1) not in result.per_series
     short = result.per_series[(98, 1)]  # 26 training days: no ML forecast possible
     assert short.ml is None and short.mae_ml is None
-    assert short.selected == BASELINE and short.nested_selected == BASELINE
+    assert short.selected == BASELINE and short.selected_by_mae == BASELINE and short.nested_by_mae == BASELINE
     assert result.ml_series == len(result.per_series) - 1
 
 
@@ -119,13 +128,26 @@ def test_every_series_is_scored_on_exactly_the_last_14_days(evaluation):
         assert ev.train_days == len(data[key]) - 14
 
 
-def test_selected_is_never_worse_than_either_model_by_construction(evaluation):
+def test_the_policy_uses_ml_for_every_series_that_has_an_ml_forecast(evaluation):
+    _, result = evaluation
+
+    for key, ev in result.per_series.items():
+        assert ev.selected == (ML if ev.ml is not None else BASELINE)
+        expected = ev.ml if ev.ml is not None else ev.baseline
+        assert np.array_equal(ev.selected_forecast, expected)
+
+    s = result.summaries
+    assert result.selected_ml == result.ml_series == len(result.per_series) - 1
+    assert s["policy"].macro_mae == pytest.approx(s["ml"].macro_mae)  # identical when every long series uses ML
+
+
+def test_the_old_rule_is_never_worse_than_either_model_by_construction(evaluation):
     _, result = evaluation
     s = result.summaries
 
-    assert s["selected"].macro_mae <= s["baseline"].macro_mae + 1e-12
-    assert s["selected"].macro_mae <= s["ml"].macro_mae + 1e-12
-    assert s["baseline"].series == s["ml"].series == s["selected"].series == len(result.per_series)
+    assert s["per_series_selection"].macro_mae <= s["baseline"].macro_mae + 1e-12
+    assert s["per_series_selection"].macro_mae <= s["ml"].macro_mae + 1e-12
+    assert s["baseline"].series == s["ml"].series == s["policy"].series == s["per_series_selection"].series == len(result.per_series)
 
 
 def test_the_baseline_window_is_one_of_the_candidates_and_reported_for_both(evaluation):
@@ -161,6 +183,7 @@ def test_the_holdout_cannot_influence_the_forecasts_it_is_scored_against(evaluat
         if ev.ml is not None:
             assert np.array_equal(twin.ml, ev.ml)
         assert twin.mae_baseline != ev.mae_baseline  # only the scoring changed
+        assert twin.selected == ev.selected  # the policy never looks at holdout errors at all
 
 
 def test_the_nested_choice_is_made_without_looking_at_the_final_holdout(evaluation):
@@ -173,15 +196,15 @@ def test_the_nested_choice_is_made_without_looking_at_the_final_holdout(evaluati
     other = evaluate_forecasting(altered)
 
     for key, ev in result.per_series.items():
-        assert other.per_series[key].nested_selected == ev.nested_selected
+        assert other.per_series[key].nested_by_mae == ev.nested_by_mae
 
-    assert other.summaries["nested_selected"].macro_mae != result.summaries["nested_selected"].macro_mae
+    assert other.summaries["per_series_selection_nested"].macro_mae != result.summaries["per_series_selection_nested"].macro_mae
 
 
 def test_the_nested_estimate_needs_two_full_windows_of_history(evaluation):
     _, result = evaluation
 
-    assert result.per_series[(98, 1)].nested_selected == BASELINE  # only 26 days before the holdout
+    assert result.per_series[(98, 1)].nested_by_mae == BASELINE  # only 26 days before the holdout
 
 
 def test_metrics_are_json_ready_and_complete(evaluation):
@@ -191,11 +214,12 @@ def test_metrics_are_json_ready_and_complete(evaluation):
     text = json.dumps(metrics, allow_nan=False)  # raises on NaN / infinity
     parsed = json.loads(text)
 
-    assert set(parsed["overall"]) == {"baseline", "ml", "selected", "nested_selected", "seasonal_naive"}
+    assert set(parsed["overall"]) == {"baseline", "ml", "policy", "per_series_selection", "per_series_selection_nested", "seasonal_naive"}
     assert parsed["holdout_days"] == 14
     assert parsed["series_evaluated"] == len(result.per_series)
-    assert parsed["selected_ml"] + parsed["selected_baseline"] == parsed["series_evaluated"]
-    assert parsed["per_series"]["1:1"]["selected"] in ("BASELINE", "ML")
+    assert parsed["policy_ml"] + parsed["policy_baseline"] == parsed["series_evaluated"]
+    entry = parsed["per_series"]["1:1"]
+    assert entry["selected"] == "ML" and entry["selected_by_mae"] in ("BASELINE", "ML") and entry["nested_selected_by_mae"] in ("BASELINE", "ML")
     assert parsed["notes"]
 
 

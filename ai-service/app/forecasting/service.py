@@ -13,7 +13,8 @@ from app.data.series import daily_demand, series_map
 from app.data.sources import LedgerSource
 from app.errors import ServiceError
 from app.forecasting.baseline import CANDIDATE_WINDOWS, moving_average_forecast, select_window
-from app.forecasting.evaluate import BASELINE, HOLDOUT_DAYS, ML
+from app.forecasting.evaluate import BASELINE, HOLDOUT_DAYS, ML, policy_choice
+from app.forecasting.features import MIN_HISTORY
 from app.forecasting.training import KIND, TrainOutcome, _fallback_sigma, train_forecasting
 from app.registry import ModelRegistry, RegistryError
 
@@ -85,22 +86,22 @@ class ForecastService:
             window, _ = select_window(values, CANDIDATE_WINDOWS, horizon=HOLDOUT_DAYS)
             trained = {
                 "baseline_window": window,
-                "selected": BASELINE,
                 "sigma": _fallback_sigma(history),
                 "mae_baseline": None,
                 "mae_ml": None,
                 "evaluated": False,
             }
-            notes.append("Series was not part of the trained model; baseline forecast with a recent-spread sigma.")
+            notes.append("Series was not part of the trained model; its sigma is the spread of its recent demand.")
 
         baseline = moving_average_forecast(values, trained["baseline_window"], horizon)
         model = artifact["model"]
         ml = model.predict(history, horizon) if model.can_forecast(history) else None
 
-        if trained["selected"] == ML and ml is None:
-            notes.append("ML was selected but the series is too short for it; using the baseline.")
+        # AI-003 policy, decided on the series' current history: ML from 28 days, the baseline before
+        selected = policy_choice(ml is not None)
 
-        selected = ML if trained["selected"] == ML and ml is not None else BASELINE
+        if selected == BASELINE:
+            notes.append(f"Fewer than {MIN_HISTORY} days of history: the baseline is used, not the ML model.")
         chosen = ml if selected == ML else baseline
         days = pd.date_range(day + pd.Timedelta(days=1), periods=horizon, freq="D")
         recent = history.iloc[-HISTORY_DAYS:]

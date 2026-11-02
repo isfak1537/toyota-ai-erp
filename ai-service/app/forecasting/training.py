@@ -11,7 +11,7 @@ from typing import Mapping
 import pandas as pd
 
 from app.forecasting.baseline import CANDIDATE_WINDOWS, select_window
-from app.forecasting.evaluate import BASELINE, HOLDOUT_DAYS, EvaluationResult, estimate_sigma, evaluate_forecasting
+from app.forecasting.evaluate import HOLDOUT_DAYS, EvaluationResult, evaluate_forecasting, policy_choice
 from app.forecasting.model import DEFAULT_PARAMS, MAX_HORIZON, GlobalDemandModel
 from app.registry import ModelRegistry
 from app.versioning import fingerprint_series, library_versions, make_version
@@ -70,7 +70,9 @@ def train_forecasting(
 
         per_series[key] = {
             "baseline_window": window,
-            "selected": ev.selected if ev else BASELINE,
+            # AI-003 policy: ML for any series with at least 28 days of history
+            "selected": policy_choice(final_model.can_forecast(history)),
+            "selected_by_mae": ev.selected_by_mae if ev else None,  # the old rule, for information only
             "sigma": ev.sigma if ev else _fallback_sigma(history),
             "mae_baseline": ev.mae_baseline if ev else None,
             "mae_ml": ev.mae_ml if ev else None,

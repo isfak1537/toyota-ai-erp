@@ -8,10 +8,10 @@ accuracy a real plant would see. Python 3.13.5, pandas 3.1.0, scikit-learn 1.9.1
 
 ## Summary
 
-* **Forecast.** The global ML model has a 14.3% lower holdout MAE than the 7/14-day moving average
-  (1.317 vs 1.536 units/day) and wins on 18 of 24 series.
-* **The AI-003 selection rule looks better than it is.** Choosing the better model per series on the same 14 days gives 1.294,
-  but the nested (honest) estimate of that policy is 1.414, which is worse than simply always using ML (1.317).
+* **Forecast.** The AI-003 policy (the global ML model for every series with at least 28 days of history, the baseline otherwise) has a
+  14.3% lower holdout MAE than the 7/14-day moving average (1.317 vs 1.536 units/day) and is better on 18 of 24 series.
+* **Why the policy replaced "lower holdout MAE per series".** That rule reports 1.294, but only because it picks each winner on the days it is scored on.
+  Its nested (honest) estimate is 1.414, worse than the policy (1.317).
 * **Anomalies.** The four rules catch 6 of 8 injected anomalies, by construction. The
   Isolation Forest catches **0 of 8** at its 0.5% operating point, although it ranks them
   far above chance (ROC-AUC 0.85). Combined precision is 0.18: 27 of 33 flags are not labelled anomalies.
@@ -25,19 +25,20 @@ all 14 days from that origin. MAE is in units per day. "MAE (mean of series)" co
 | Policy | MAE (mean of series) | MAE (pooled days) | WAPE | Bias |
 | --- | --- | --- | --- | --- |
 | Moving average (baseline) | 1.536 | 1.536 | 0.500 | +0.033 |
-| ML (global model) | 1.317 | 1.317 | 0.428 | -0.123 |
-| Selected per series (AI-003) | 1.294 | 1.294 | 0.421 | -0.130 |
-| Selected, nested estimate | 1.414 | 1.414 | 0.460 | -0.062 |
+| **AI-003 policy: ML from 28 days of history** | 1.317 | 1.317 | 0.428 | -0.123 |
+| Old rule: lower MAE per series (optimistic) | 1.294 | 1.294 | 0.421 | -0.130 |
+| Old rule, nested estimate (honest) | 1.414 | 1.414 | 0.460 | -0.062 |
 | Seasonal naive (reference) | 1.777 | 1.777 | 0.578 | +0.039 |
 
-* ML is 14.3% better than the baseline and 25.9% better than the seasonal-naive reference (1.777).
-* **Selection optimism.** "Selected" (1.294) picks the winner per series on the very days it is scored on. The nested estimate selects on the
-  *earlier* 14 days and scores on the untouched holdout: 1.414, 8.0% better than the baseline. AI-003 and the nested policy agree on only
-  37.5% of series (ML chosen for 18 vs 11), so per-series winners from 14 noisy days are unstable.
+* The policy is 14.3% better than the baseline and 25.9% better than the seasonal-naive reference (1.777).
+  All 24 evaluated series that have an ML forecast use it; the others use the baseline.
+* **Why the old rule was dropped.** "Lower MAE per series" (1.294) picks the winner on the very days it is scored on. The nested estimate selects on the
+  *earlier* 14 days and scores on the untouched holdout: 1.414, 8.0% better than the baseline but 7.3% worse than the policy.
+  The two selections agree on only 37.5% of series (ML chosen for 18 vs 11), so per-series winners from 14 noisy days are unstable.
 * **WAPE is still 42.8% for ML.** With 3.1 units a day on average, most of the error is Poisson noise no model can remove.
 * **Bias.** ML under-forecasts by 0.123 units/day (4.0% of mean demand). For replenishment that slightly understates demand.
 * **Windows.** Baseline windows chosen on training days: 7 days for 5 series, 14 days for 19 series.
-* **Sigma** (RMSE of the selected model's 14 holdout residuals, floored at the Poisson spread): median 1.64, range 0.54 to 3.57 units/day. A 14-point estimate is noisy.
+* **Sigma** (RMSE of the policy model's 14 holdout residuals, floored at the Poisson spread): median 1.64, range 0.54 to 3.57 units/day. A 14-point estimate is noisy.
 
 **Sensitivity: five products are steered by the seed generator.** For the SEED-007 demo scenarios the last 12 days of demand of five products are shaped to land chosen
 stock levels, and those days lie inside the holdout. Without them (19 series):
@@ -45,11 +46,11 @@ stock levels, and those days lie inside the holdout. Without them (19 series):
 | Policy | MAE, all series | MAE, without the 5 steered |
 | --- | --- | --- |
 | Baseline | 1.536 | 1.276 |
-| ML | 1.317 | 1.175 |
-| Selected | 1.294 | 1.145 |
-| Selected, nested | 1.414 | 1.212 |
+| AI-003 policy (ML) | 1.317 | 1.175 |
+| Old rule | 1.294 | 1.145 |
+| Old rule, nested | 1.414 | 1.212 |
 
-ML's advantage is 7.9% without the steered series, against 14.3% with them: part of the headline comes from the generated last days.
+The policy's advantage is 7.9% without the steered series, against 14.3% with them: part of the headline comes from the generated last days.
 
 ## 2. Anomaly detection (AI-008)
 
@@ -96,14 +97,14 @@ large legitimate goods receipts that the model finds unusual, and ordinary tail 
 ## 3. What not to conclude
 
 * Not that ML forecasting is 14.3% better for a real plant, or that the Isolation Forest does not work: it was given 8 synthetic anomalies, 6 of which the rules already cover.
-* Not that the selected-per-series figure is the expected accuracy of AI-003. Quote the nested estimate.
+* Not that the old per-series figure (1.294) was ever the expected accuracy of a selection rule; only the nested estimate (1.414) is.
 * Not that rule or model thresholds are good: they were deliberately not tuned on 8 labels.
 * Demand is observed issues; stock-outs hide demand (censoring). The synthetic data has very few; real data may not.
 * No outlier cleaning was applied: the injected anomalies remain in the training series (their effect is small but not zero).
 
 ## 4. Options for the owner (not implemented)
 
-1. **AI-003 policy.** On this data per-series selection (1.414) is worse than always using the global ML model (1.317). Options: keep AI-003 as specified, or select the baseline only when it wins by a margin, or default to ML.
+1. **AI-003 is decided** (see SRS): ML from 28 days of history, the baseline before. A margin rule ("baseline only if it wins by X") would need more than 14 days of evidence per series.
 2. **Receipts as model noise.** Large goods receipts and the opening stock dominate the model's flags; scoring receipts separately, or excluding the opening balance, would reduce them.
 3. **A duplicate rule** (identical movement within minutes) and a Poisson-aware size threshold for R2 would address the two clearest misses/false alarms. They were left out so the model could be evaluated on duplicates.
 4. **Rare signals need a rule.** Off-hours activity is too rare in the data for a forest to learn from (the feature is already continuous); keep the rule, and consider a supervised component once real labels exist.

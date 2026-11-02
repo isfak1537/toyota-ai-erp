@@ -80,7 +80,7 @@ def test_training_registers_a_version_that_health_then_reports(trained):
 
     assert outcome["kind"] == "forecast" and outcome["activated"] is True
     assert re.fullmatch(r"forecast-20261101-[0-9a-f]{8}", outcome["version"])
-    assert set(outcome["metrics"]["overall"]) == {"baseline", "ml", "selected", "nested_selected", "seasonal_naive"}
+    assert set(outcome["metrics"]["overall"]) == {"baseline", "ml", "policy", "per_series_selection", "per_series_selection_nested", "seasonal_naive"}
     assert client.get("/health").json()["models"]["forecast"] == outcome["version"]
     assert registry.active_version("forecast") == outcome["version"]
 
@@ -286,7 +286,7 @@ def test_training_without_a_database_configured_is_a_503():
 # ---- series the model has not seen ------------------------------------------------------------------------------------
 
 
-def test_a_series_that_was_not_in_the_trained_model_gets_a_flagged_baseline(tmp_path):
+def test_a_series_that_was_not_in_the_trained_model_still_gets_ml_with_a_flagged_sigma(tmp_path):
     client, registry = build_client(tmp_path)
     ledger = CsvSource(FIXTURES).ledger()
     some = dict(list(series_map(daily_demand(ledger)).items())[:6])
@@ -295,10 +295,27 @@ def test_a_series_that_was_not_in_the_trained_model_gets_a_flagged_baseline(tmp_
 
     item = client.post("/forecast", json={"series": [ref(*unseen)], "horizonDays": 5}, headers=HEADERS).json()["results"][0]
 
-    assert item["status"] == "OK" and item["selectedModel"] == "BASELINE"
+    assert item["status"] == "OK" and item["selectedModel"] == "ML"  # 90 days of history: the AI-003 policy
     assert item["metrics"]["maeBaseline"] is None and item["metrics"]["maeMl"] is None
     assert any("not part of the trained model" in note for note in item["notes"])
-    assert all(row["ml"] is not None for row in item["forecast"])  # ML is shown for comparison, just not chosen
+    assert all(row["ml"] is not None and row["mean"] == row["ml"] for row in item["forecast"])
+
+
+def test_the_policy_follows_the_history_length_at_the_as_of_day(trained):
+    client, _, _, _ = trained
+
+    def item(as_of):
+        body = {"series": [ref(7, 1)], "horizonDays": 5, "asOf": as_of}
+
+        return client.post("/forecast", json=body, headers=HEADERS).json()["results"][0]
+
+    young, old = item("2026-08-30"), item("2026-09-01")  # series 7/1 starts 2026-08-04: 27 vs 29 days of history
+
+    assert young["inputs"]["historyDays"] == 27 and young["selectedModel"] == "BASELINE"
+    assert any("Fewer than 28 days" in note for note in young["notes"])
+    assert all(row["ml"] is None and row["mean"] == row["baseline"] for row in young["forecast"])
+    assert old["inputs"]["historyDays"] == 29 and old["selectedModel"] == "ML"
+    assert item("2026-09-01")["notes"] == []
 
 
 # ---- the database source builds parameterised SQL ---------------------------------------------------------------------

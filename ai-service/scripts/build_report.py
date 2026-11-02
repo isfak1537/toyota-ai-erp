@@ -51,19 +51,21 @@ def build() -> str:
     series = series_map(daily_demand(ledger, tz_offset_hours=6))
     forecast = evaluate_forecasting(series)
     s = forecast.summaries
-    b, m, sel, nested, naive = (s[k].macro_mae for k in ("baseline", "ml", "selected", "nested_selected", "seasonal_naive"))
+    b, m, sel, nested, naive = (s[k].macro_mae for k in ("baseline", "ml", "per_series_selection", "per_series_selection_nested", "seasonal_naive"))
+    policy = s["policy"].macro_mae
     evaluated = forecast.per_series
     wins = sum(1 for e in evaluated.values() if e.mae_ml is not None and e.mae_ml < e.mae_baseline)
-    agree = np.mean([e.selected == e.nested_selected for e in evaluated.values()])
+    agree = np.mean([e.selected_by_mae == e.nested_by_mae for e in evaluated.values()])
     mean_demand = np.mean([e.actual.mean() for e in evaluated.values()])
     kept = {k: e for k, e in evaluated.items() if sku[k[0]] not in steered}
     sub = lambda pick: summarise({k: (e.actual, pick(e)) for k, e in kept.items()}).macro_mae
-    sub_b, sub_m, sub_sel, sub_nested = sub(lambda e: e.baseline), sub(lambda e: e.ml_or_baseline), sub(lambda e: e.selected_forecast), sub(lambda e: e.nested_forecast)
+    sub_b, sub_m, sub_sel, sub_nested = sub(lambda e: e.baseline), sub(lambda e: e.ml_or_baseline), sub(lambda e: e.by_mae_forecast), sub(lambda e: e.nested_forecast)
     sigma = np.array([e.sigma for e in evaluated.values()])
     windows = pd.Series([e.baseline_window for e in evaluated.values()]).value_counts().sort_index().to_dict()
 
-    names = [("baseline", "Moving average (baseline)"), ("ml", "ML (global model)"), ("selected", "Selected per series (AI-003)"),
-             ("nested_selected", "Selected, nested estimate"), ("seasonal_naive", "Seasonal naive (reference)")]
+    names = [("baseline", "Moving average (baseline)"), ("policy", "**AI-003 policy: ML from 28 days of history**"),
+             ("per_series_selection", "Old rule: lower MAE per series (optimistic)"), ("per_series_selection_nested", "Old rule, nested estimate (honest)"),
+             ("seasonal_naive", "Seasonal naive (reference)")]
     overall_rows = [[label, f"{s[k].macro_mae:.3f}", f"{s[k].micro_mae:.3f}", f"{s[k].wape:.3f}", f"{s[k].bias:+.3f}"] for k, label in names]
 
     # ------------------------------------------------------------------- anomalies
@@ -98,10 +100,10 @@ accuracy a real plant would see. Python {versions['python']}, pandas {versions['
 
 ## Summary
 
-* **Forecast.** The global ML model has a {pct(1 - m / b)} lower holdout MAE than the 7/14-day moving average
-  ({m:.3f} vs {b:.3f} units/day) and wins on {wins} of {len(evaluated)} series.
-* **The AI-003 selection rule looks better than it is.** Choosing the better model per series on the same 14 days gives {sel:.3f},
-  but the nested (honest) estimate of that policy is {nested:.3f}, {'which is worse than simply always using ML' if nested > m else 'better than always using ML'} ({m:.3f}).
+* **Forecast.** The AI-003 policy (the global ML model for every series with at least 28 days of history, the baseline otherwise) has a
+  {pct(1 - policy / b)} lower holdout MAE than the 7/14-day moving average ({policy:.3f} vs {b:.3f} units/day) and is better on {wins} of {len(evaluated)} series.
+* **Why the policy replaced "lower holdout MAE per series".** That rule reports {sel:.3f}, but only because it picks each winner on the days it is scored on.
+  Its nested (honest) estimate is {nested:.3f}, {'worse' if nested > policy else 'better'} than the policy ({policy:.3f}).
 * **Anomalies.** The four rules catch {int(o.loc['rules', 'true_positives'])} of {total} injected anomalies, by construction. The
   Isolation Forest catches **{int(o.loc['model', 'true_positives'])} of {total}** at its 0.5% operating point, although it ranks them
   far above chance (ROC-AUC {r['roc_auc']:.2f}). Combined precision is {o.loc['combined', 'precision']:.2f}: {int(o.loc['combined', 'false_positives'])} of {int(scored['flagged'].sum())} flags are not labelled anomalies.
@@ -114,21 +116,22 @@ all 14 days from that origin. MAE is in units per day. "MAE (mean of series)" co
 
 {table(["Policy", "MAE (mean of series)", "MAE (pooled days)", "WAPE", "Bias"], overall_rows)}
 
-* ML is {pct(1 - m / b)} better than the baseline and {pct(1 - m / naive)} better than the seasonal-naive reference ({naive:.3f}).
-* **Selection optimism.** "Selected" ({sel:.3f}) picks the winner per series on the very days it is scored on. The nested estimate selects on the
-  *earlier* 14 days and scores on the untouched holdout: {nested:.3f}, {pct(1 - nested / b)} better than the baseline. AI-003 and the nested policy agree on only
-  {pct(agree)} of series (ML chosen for {forecast.selected_ml} vs {forecast.nested_selected_ml}), so per-series winners from 14 noisy days are unstable.
+* The policy is {pct(1 - policy / b)} better than the baseline and {pct(1 - policy / naive)} better than the seasonal-naive reference ({naive:.3f}).
+  All {forecast.selected_ml} evaluated series that have an ML forecast use it; the others use the baseline.
+* **Why the old rule was dropped.** "Lower MAE per series" ({sel:.3f}) picks the winner on the very days it is scored on. The nested estimate selects on the
+  *earlier* 14 days and scores on the untouched holdout: {nested:.3f}, {pct(1 - nested / b)} better than the baseline but {pct(nested / policy - 1)} worse than the policy.
+  The two selections agree on only {pct(agree)} of series (ML chosen for {forecast.by_mae_ml} vs {forecast.nested_by_mae_ml}), so per-series winners from 14 noisy days are unstable.
 * **WAPE is still {pct(s['ml'].wape)} for ML.** With {mean_demand:.1f} units a day on average, most of the error is Poisson noise no model can remove.
 * **Bias.** ML under-forecasts by {abs(s['ml'].bias):.3f} units/day ({pct(abs(s['ml'].bias) / mean_demand)} of mean demand). For replenishment that slightly understates demand.
 * **Windows.** Baseline windows chosen on training days: {', '.join(f'{w} days for {n} series' for w, n in windows.items())}.
-* **Sigma** (RMSE of the selected model's 14 holdout residuals, floored at the Poisson spread): median {np.median(sigma):.2f}, range {sigma.min():.2f} to {sigma.max():.2f} units/day. A 14-point estimate is noisy.
+* **Sigma** (RMSE of the policy model's 14 holdout residuals, floored at the Poisson spread): median {np.median(sigma):.2f}, range {sigma.min():.2f} to {sigma.max():.2f} units/day. A 14-point estimate is noisy.
 
 **Sensitivity: five products are steered by the seed generator.** For the SEED-007 demo scenarios the last 12 days of demand of five products are shaped to land chosen
 stock levels, and those days lie inside the holdout. Without them ({len(kept)} series):
 
-{table(["Policy", "MAE, all series", f"MAE, without the {len(evaluated) - len(kept)} steered"], [["Baseline", f"{b:.3f}", f"{sub_b:.3f}"], ["ML", f"{m:.3f}", f"{sub_m:.3f}"], ["Selected", f"{sel:.3f}", f"{sub_sel:.3f}"], ["Selected, nested", f"{nested:.3f}", f"{sub_nested:.3f}"]])}
+{table(["Policy", "MAE, all series", f"MAE, without the {len(evaluated) - len(kept)} steered"], [["Baseline", f"{b:.3f}", f"{sub_b:.3f}"], ["AI-003 policy (ML)", f"{policy:.3f}", f"{sub_m:.3f}"], ["Old rule", f"{sel:.3f}", f"{sub_sel:.3f}"], ["Old rule, nested", f"{nested:.3f}", f"{sub_nested:.3f}"]])}
 
-ML's advantage is {pct(1 - sub_m / sub_b)} without the steered series, against {pct(1 - m / b)} with them: part of the headline comes from the generated last days.
+The policy's advantage is {pct(1 - sub_m / sub_b)} without the steered series, against {pct(1 - policy / b)} with them: part of the headline comes from the generated last days.
 
 ## 2. Anomaly detection (AI-008)
 
@@ -157,15 +160,15 @@ large legitimate goods receipts that the model finds unusual, and ordinary tail 
 
 ## 3. What not to conclude
 
-* Not that ML forecasting is {pct(1 - m / b)} better for a real plant, or that the Isolation Forest does not work: it was given 8 synthetic anomalies, 6 of which the rules already cover.
-* Not that the selected-per-series figure is the expected accuracy of AI-003. Quote the nested estimate.
+* Not that ML forecasting is {pct(1 - policy / b)} better for a real plant, or that the Isolation Forest does not work: it was given 8 synthetic anomalies, 6 of which the rules already cover.
+* Not that the old per-series figure ({sel:.3f}) was ever the expected accuracy of a selection rule; only the nested estimate ({nested:.3f}) is.
 * Not that rule or model thresholds are good: they were deliberately not tuned on 8 labels.
 * Demand is observed issues; stock-outs hide demand (censoring). The synthetic data has very few; real data may not.
 * No outlier cleaning was applied: the injected anomalies remain in the training series (their effect is small but not zero).
 
 ## 4. Options for the owner (not implemented)
 
-1. **AI-003 policy.** On this data per-series selection ({nested:.3f}) is {'worse' if nested > m else 'better'} than always using the global ML model ({m:.3f}). Options: keep AI-003 as specified, or select the baseline only when it wins by a margin, or default to ML.
+1. **AI-003 is decided** (see SRS): ML from 28 days of history, the baseline before. A margin rule ("baseline only if it wins by X") would need more than 14 days of evidence per series.
 2. **Receipts as model noise.** Large goods receipts and the opening stock dominate the model's flags; scoring receipts separately, or excluding the opening balance, would reduce them.
 3. **A duplicate rule** (identical movement within minutes) and a Poisson-aware size threshold for R2 would address the two clearest misses/false alarms. They were left out so the model could be evaluated on duplicates.
 4. **Rare signals need a rule.** Off-hours activity is too rare in the data for a forest to learn from (the feature is already continuous); keep the rule, and consider a supervised component once real labels exist.

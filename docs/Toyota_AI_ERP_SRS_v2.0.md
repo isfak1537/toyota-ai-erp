@@ -171,7 +171,7 @@ HR, Accountant) remain as defined in v1.0 and are tagged Later.
 |--------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------|
 | AI-001 | The AI service shall build daily demand series per product and warehouse from ISSUE ledger records, filling days without issues with zero.                                                                                                                                         | MVP          |
 | AI-002 | The AI service shall produce a daily demand forecast for a configurable horizon (default 30 days) with an uncertainty estimate (standard deviation) using (a) a moving-average baseline and (b) a trained ML regressor with calendar and lag features.                             | MVP          |
-| AI-003 | The AI service shall evaluate both models on the last 14 days (holdout) and store MAE for each, the model version and training time. The model used for replenishment shall be the one with lower holdout MAE.                                                                     | MVP          |
+| AI-003 | The AI service shall evaluate both models on the last 14 days (holdout) and store MAE for each, the model version and training time. The ML model shall be used for replenishment for every series with at least 28 days of history, and the baseline for shorter series (see the note below the table).                                                                     | MVP          |
 | AI-004 | The ERP API shall compute replenishment as: SS = z × σ × √L (z = 1.65 by default); ROP = d × L + SS; if available ≤ ROP then qty = max(MOQ, ceil(d × (L + reviewDays) + SS − available − onOrder)). All inputs shall be stored with the suggestion.                                | MVP          |
 | AI-005 | Supplier selection: preferred active supplier for the product; otherwise the lowest unit price among active suppliers. Lead time and MOQ come from the selected SupplierProduct.                                                                                                   | MVP          |
 | AI-006 | Suggestions shall have status PENDING, APPROVED, REJECTED or EXPIRED. At most one PENDING suggestion may exist per product and warehouse; a new run expires older pending ones.                                                                                                    | MVP          |
@@ -183,6 +183,22 @@ HR, Accountant) remain as defined in v1.0 and are tagged Later.
 | AI-012 | LLM provider, model, API key and fallback order shall be configurable through environment variables without code changes.                                                                                                                                                          | MVP          |
 | AI-013 | An administrator shall be able to retrain models; retraining shall not interrupt serving the previous model.                                                                                                                                                                       | MVP (Could)  |
 | AI-014 | Supplier-risk scoring, predictive maintenance, expense anomaly detection, IoT analytics.                                                                                                                                                                                           | Later        |
+
+**Note on AI-003 (rule changed 2 Nov 2026, with the evidence).** The first version of AI-003 said to use, per series, the model with the
+lower holdout MAE. It was replaced after evaluation on the synthetic dataset (24 product-warehouse series, holdout 2026-10-19 to
+2026-11-01, MAE in units per day, mean over series):
+
+| Policy | Holdout MAE |
+|---|---|
+| Moving-average baseline | 1.536 |
+| ML model (the AI-003 policy: ML from 28 days of history) | 1.317 |
+| Old rule: lower holdout MAE per series | 1.294 |
+| Old rule, nested estimate | 1.414 |
+
+The old rule's 1.294 is optimistic because each winner is picked on the 14 days it is then scored on. In the nested estimate the choice is
+made on the preceding 14 days and scored on the untouched holdout; it gives 1.414, worse than using the ML model alone, and the old and the
+nested choice agreed on only 38% of series. The ML model is 14.3% better than the baseline overall (and better on 18 of 24 series). The
+figures come from synthetic data and must be re-measured on real data; the full results are in `ai-service/REPORT.md`.
 
 # 6. Functional Requirements — Web Interface and Authentication
 
