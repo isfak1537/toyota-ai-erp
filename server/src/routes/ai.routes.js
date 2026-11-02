@@ -10,6 +10,9 @@ const router = express.Router();
 
 // Reads are open to every authenticated role; each write names its roles.
 router.post("/replenishment/run", requireRole(...roles.PROCUREMENT), validate(runReplenishmentSchema), controller.runReplenishment);
+router.get("/replenishment/latest", controller.latestReplenishment);
+router.get("/days-of-cover", controller.daysOfCover);
+router.get("/audit", requireRole(...roles.ADMIN_ONLY), controller.auditLog);
 router.get("/suggestions", controller.listSuggestions);
 router.post("/suggestions/:id/explain", requireRole(...roles.PROCUREMENT), validate(approveSuggestionSchema), controller.explainSuggestion);
 router.post("/suggestions/:id/approve", requireRole(...roles.PROCUREMENT), validate(approveSuggestionSchema), controller.approveSuggestion);

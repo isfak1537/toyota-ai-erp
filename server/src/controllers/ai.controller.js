@@ -10,7 +10,10 @@ const { parseId } = require("../utils/ids");
 const { parsePagination, toPagination } = require("../utils/pagination");
 const { ValidationError } = require("../errors/app-error");
 const { fieldDetails } = require("../utils/zod-details");
-const { listSuggestionsQuery, listAnomaliesQuery, listModelsQuery, forecastQuery } = require("../validators/ai.validator");
+const { listSuggestionsQuery, listAnomaliesQuery, listModelsQuery, forecastQuery, daysOfCoverQuery, auditQuery } = require("../validators/ai.validator");
+const { computeDaysOfCover } = require("../modules/ai/cover");
+const { getAiClient } = require("../modules/ai/ai.client");
+const { listAuditLog } = require("../modules/ai/audit-log.service");
 
 const parseQuery = (schema, query) => {
   const result = schema.safeParse(query);
@@ -144,7 +147,35 @@ const ask = async (req, res) => {
   res.json({ success: true, message: data.unavailable ? "The assistant is unavailable right now" : "OK", data });
 };
 
+const latestReplenishment = async (req, res) => {
+  const data = await replenishment.latestRun();
+
+  res.json({ success: true, message: data ? "OK" : "No replenishment run yet", data });
+};
+
+const daysOfCover = async (req, res) => {
+  const query = parseQuery(daysOfCoverQuery, req.query);
+  const data = await computeDaysOfCover({ db: prisma, aiClient: getAiClient, warehouseCode: query.warehouseCode, limit: query.limit });
+
+  if (data.error) {
+    throw new NotFoundError(data.error);
+  }
+
+  res.json({ success: true, data });
+};
+
+const auditLog = async (req, res) => {
+  const filters = parseQuery(auditQuery, req.query);
+  const pagination = parsePagination(req.query);
+  const { items, total, eventTypes } = await listAuditLog({ ...filters, skip: pagination.skip, take: pagination.take });
+
+  res.json({ success: true, data: items, eventTypes, pagination: toPagination(pagination, total) });
+};
+
 module.exports = {
+  latestReplenishment,
+  daysOfCover,
+  auditLog,
   ask,
   explainSuggestion,
   explainAnomaly,

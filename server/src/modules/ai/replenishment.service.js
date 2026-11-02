@@ -6,6 +6,7 @@ const { getAiClient } = require("./ai.client");
 const { computeReplenishment, selectSupplier, onOrderFor } = require("./replenishment");
 const { writeAudit } = require("../../services/audit.service");
 const { explainMany, explainSuggestion } = require("./llm/explain");
+const { daysOfCover } = require("./cover");
 
 const FORECAST_BATCH = 500; // the AI service accepts at most 500 series per request
 const FORECAST_HORIZON = 30; // days asked for; the first (lead time + review) days are averaged
@@ -41,7 +42,14 @@ const runReplenishment = async (actor) => {
 
   const candidates = await prisma.inventory.findMany({
     where: { product: { isActive: true, isStockTracked: true }, warehouse: { isActive: true } },
-    select: { productId: true, warehouseId: true, quantity: true, reservedQuantity: true },
+    select: {
+      productId: true,
+      warehouseId: true,
+      quantity: true,
+      reservedQuantity: true,
+      product: { select: { sku: true, name: true, reorderLevel: true } },
+      warehouse: { select: { code: true } },
+    },
     orderBy: [{ productId: "asc" }, { warehouseId: "asc" }],
   });
 
@@ -125,6 +133,38 @@ const runReplenishment = async (actor) => {
   const skipped = [];
   const counts = { evaluated: candidates.length, suggested: 0, notNeeded: 0, coveredByOnOrder: 0, skipped: 0 };
   const runId = crypto.randomUUID();
+  const series = []; // one entry per evaluated series, for the "replenishment review" (every decision and why)
+
+  const SKIP_TEXT = {
+    NO_HISTORY: "No demand history for this product and warehouse, so there is no forecast.",
+    NO_SUPPLIER: "No active supplier is linked to this product.",
+    NO_LEAD_TIME: "The chosen supplier link has no lead time.",
+  };
+
+  const noteSeries = (c, forecast, extra) => {
+    const available = c.quantity - c.reservedQuantity;
+
+    series.push({
+      productId: c.productId,
+      warehouseId: c.warehouseId,
+      sku: c.product.sku,
+      name: c.product.name,
+      warehouse: c.warehouse.code,
+      staticReorderLevel: c.product.reorderLevel,
+      available,
+      daysOfCover: forecast?.status === "OK" ? daysOfCover(available, forecast.forecast.map((d) => d.mean)) : null,
+      reorderPoint: null,
+      safetyStock: null,
+      dailyMean: null,
+      sigma: null,
+      leadTimeDays: null,
+      onOrder: null,
+      onOrderMethod: null,
+      suggestedQty: null,
+      suggestionId: null,
+      ...extra,
+    });
+  };
 
   for (const c of candidates) {
     const where = { productId: c.productId, warehouseId: c.warehouseId };
@@ -134,6 +174,7 @@ const runReplenishment = async (actor) => {
     const skip = (reason) => {
       skipped.push({ ...where, reason });
       counts.skipped += 1;
+      noteSeries(c, forecast, { decision: "SKIPPED", skipCode: reason, reason: SKIP_TEXT[reason] });
     };
 
     if (!forecast || forecast.status !== "OK") {
@@ -175,12 +216,40 @@ const runReplenishment = async (actor) => {
       reviewDays,
     });
 
+    const round = (value, digits) => Number(value.toFixed(digits));
+    const common = {
+      reorderPoint: round(math.reorderPoint, 1),
+      safetyStock: round(math.safetyStock, 1),
+      dailyMean: round(dailyMean, 2),
+      sigma: round(forecast.sigma, 2),
+      leadTimeDays: option.leadTimeDays,
+      onOrder: onOrder.onOrder,
+      onOrderMethod: onOrder.method,
+    };
+
     if (math.suggestedQty === null) {
-      counts[math.outcome === "COVERED_BY_ON_ORDER" ? "coveredByOnOrder" : "notNeeded"] += 1;
+      const covered = math.outcome === "COVERED_BY_ON_ORDER";
+
+      counts[covered ? "coveredByOnOrder" : "notNeeded"] += 1;
+      noteSeries(c, forecast, {
+        ...common,
+        decision: covered ? "COVERED_BY_ON_ORDER" : "NOT_NEEDED",
+        reason: covered
+          ? `Available ${available} is at or below the reorder point ${common.reorderPoint}, but ${onOrder.onOrder} units already on order cover the need.`
+          : math.belowReorderPoint
+            ? `Available ${available} is at or below the reorder point ${common.reorderPoint}, but the forecast demand over lead time plus review needs no more stock.`
+            : `Available ${available} is above the reorder point ${common.reorderPoint}.`,
+      });
       continue;
     }
 
     counts.suggested += 1;
+    noteSeries(c, forecast, {
+      ...common,
+      decision: "ORDERED",
+      suggestedQty: math.suggestedQty,
+      reason: `Available ${available} is at or below the reorder point ${common.reorderPoint}; suggesting ${math.suggestedQty} units${math.outcome === "SUGGEST_MOQ" ? " (the supplier's minimum order quantity)" : ""}.`,
+    });
     drafts.push({
       runId,
       ...where,
@@ -244,6 +313,12 @@ const runReplenishment = async (actor) => {
       rows.push(await tx.aiSuggestion.create({ data: draft, include: suggestionInclude }));
     }
 
+    for (const row of rows) {
+      const entry = series.find((x) => x.productId === row.productId && x.warehouseId === row.warehouseId);
+
+      if (entry) entry.suggestionId = row.id;
+    }
+
     await writeAudit(tx, {
       eventType: "REPLENISHMENT_RUN",
       actorUserId: actor?.id ?? null,
@@ -255,6 +330,7 @@ const runReplenishment = async (actor) => {
         counts: { ...counts, expiredPending: expired.count },
         skipped,
         suggestionIds: rows.map((row) => row.id),
+        series,
       },
     });
 
@@ -299,4 +375,23 @@ const listSuggestions = async ({ status, productId, warehouseId, skip, take }) =
   return { items, total };
 };
 
-module.exports = { runReplenishment, listSuggestions, suggestionInclude };
+// The review of the most recent run: every series that was evaluated, with its decision and why.
+const latestRun = async () => {
+  const row = await prisma.aiAuditLog.findFirst({ where: { eventType: "REPLENISHMENT_RUN" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
+
+  if (!row) return null;
+
+  const p = row.payload;
+
+  return {
+    runId: p.runId,
+    ranAt: row.createdAt,
+    modelVersion: p.modelVersion,
+    asOf: p.asOf,
+    params: p.params,
+    counts: p.counts,
+    series: p.series ?? [],
+  };
+};
+
+module.exports = { runReplenishment, listSuggestions, latestRun, suggestionInclude };

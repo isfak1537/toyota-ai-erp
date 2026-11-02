@@ -34,6 +34,7 @@ const PER_ROUTE_WRITES = {
   "POST /anomalies/sync": roles.ANOMALY_REVIEW,
   "POST /anomalies/:id/review": roles.ANOMALY_REVIEW,
   "POST /models/retrain": roles.ADMIN_ONLY,
+  "GET /audit": roles.ADMIN_ONLY, // the AI audit log is for ADMIN
   "POST /ask": ALL, // the read-only assistant is open to every logged-in role
   "POST /suggestions/:id/explain": roles.PROCUREMENT,
   "POST /anomalies/:id/explain": roles.ANOMALY_REVIEW,
@@ -57,7 +58,8 @@ const declared = () =>
         Object.keys(layer.route.methods).map((method) => {
           const verb = method.toUpperCase();
           const write = verb !== "GET";
-          const allowed = !write ? null : writeRoles ?? PER_ROUTE_WRITES[`${verb} ${layer.route.path}`];
+          const own = PER_ROUTE_WRITES[`${verb} ${layer.route.path}`]; // a route may name its own roles, reads included
+          const allowed = own ?? (!write ? null : writeRoles);
 
           return { verb, path: `${prefix}${layer.route.path === "/" ? "" : layer.route.path}`, allowed, key: `${verb} ${layer.route.path}` };
         })
