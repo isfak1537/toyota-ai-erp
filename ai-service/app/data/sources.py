@@ -37,11 +37,18 @@ LEDGER_SQL = (
 PRODUCTS_SQL = 'SELECT "id", "sku", "name" FROM "Product" ORDER BY "id"'
 WAREHOUSES_SQL = 'SELECT "id", "code", "name" FROM "Warehouse" ORDER BY "id"'
 
-ALL_SQL = (LEDGER_SQL, PRODUCTS_SQL, WAREHOUSES_SQL)
+LATEST_SQL = 'SELECT MAX("createdAt") AS latest FROM "InventoryTransaction"'
+
+ALL_SQL = (LEDGER_SQL, PRODUCTS_SQL, WAREHOUSES_SQL, LATEST_SQL)
+
+
+SeriesRef = tuple[int, int]  # (product_id, warehouse_id)
 
 
 class LedgerSource(Protocol):
-    def ledger(self, ids: Sequence[int] | None = None) -> pd.DataFrame: ...
+    def ledger(self, ids: Sequence[int] | None = None, series: Sequence[SeriesRef] | None = None) -> pd.DataFrame: ...
+
+    def latest_timestamp(self) -> pd.Timestamp | None: ...
 
     def products(self) -> pd.DataFrame: ...
 
@@ -61,7 +68,7 @@ class CsvSource:
     def __init__(self, directory: str | Path):
         self.directory = Path(directory)
 
-    def ledger(self, ids: Sequence[int] | None = None) -> pd.DataFrame:
+    def ledger(self, ids: Sequence[int] | None = None, series: Sequence[SeriesRef] | None = None) -> pd.DataFrame:
         raw = pd.read_csv(self.directory / "ledger.csv").rename(
             columns={
                 "productId": "product_id",
@@ -74,7 +81,19 @@ class CsvSource:
         )
         frame = _normalise_ledger(raw)
 
-        return frame if ids is None else frame[frame["id"].isin(list(ids))].reset_index(drop=True)
+        if ids is not None:
+            frame = frame[frame["id"].isin(list(ids))]
+
+        if series is not None:
+            wanted = pd.MultiIndex.from_tuples(list(series), names=["product_id", "warehouse_id"])
+            frame = frame[pd.MultiIndex.from_frame(frame[["product_id", "warehouse_id"]]).isin(wanted)]
+
+        return frame.reset_index(drop=True)
+
+    def latest_timestamp(self) -> pd.Timestamp | None:
+        ledger = self.ledger()
+
+        return None if ledger.empty else ledger["created_at"].max()
 
     def products(self) -> pd.DataFrame:
         return pd.read_csv(self.directory / "products.csv")
@@ -102,13 +121,31 @@ class PostgresSource:
 
                 return pd.DataFrame(cursor.fetchall(), columns=columns)
 
-    def ledger(self, ids: Sequence[int] | None = None) -> pd.DataFrame:
-        if ids is None:
-            frame = self._query(f"{LEDGER_SQL} ORDER BY \"createdAt\", \"id\"")
-        else:
-            frame = self._query(f"{LEDGER_SQL} WHERE \"id\" = ANY(%s) ORDER BY \"createdAt\", \"id\"", [list(ids)])
+    def ledger(self, ids: Sequence[int] | None = None, series: Sequence[SeriesRef] | None = None) -> pd.DataFrame:
+        conditions, params = [], []
+
+        if ids is not None:
+            conditions.append('"id" = ANY(%s)')
+            params.append(list(ids))
+
+        if series is not None:
+            if not series:
+                return _normalise_ledger(pd.DataFrame(columns=LEDGER_COLUMNS))
+
+            pairs = ", ".join(["(%s, %s)"] * len(series))
+            conditions.append(f'("productId", "warehouseId") IN ({pairs})')
+            params.extend(value for pair in series for value in (int(pair[0]), int(pair[1])))
+
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        frame = self._query(f'{LEDGER_SQL}{where} ORDER BY "createdAt", "id"', params or None)
 
         return _normalise_ledger(frame)
+
+    def latest_timestamp(self) -> pd.Timestamp | None:
+        frame = self._query(LATEST_SQL)
+        value = frame.iloc[0, 0] if not frame.empty else None
+
+        return None if value is None or pd.isna(value) else pd.Timestamp(value)
 
     def products(self) -> pd.DataFrame:
         return self._query(PRODUCTS_SQL)

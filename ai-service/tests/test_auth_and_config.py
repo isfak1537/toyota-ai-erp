@@ -14,7 +14,8 @@ def test_health_is_open_and_reveals_no_data(client):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert set(body) == {"status", "service", "version", "python"}
+    assert set(body) == {"status", "service", "version", "python", "models"}
+    assert body["models"] == {"forecast": None}  # nothing trained yet
 
 
 @pytest.mark.parametrize("path", PROTECTED)
@@ -36,6 +37,30 @@ def test_secret_is_checked_before_the_body(client, path):
     assert client.post(path, content=b"not json", headers={"Content-Type": "application/json"}).status_code == 401
 
 
+@pytest.mark.parametrize("path", ["/forecast", "/train"])
+def test_a_wrong_secret_with_a_malformed_body_never_reveals_the_schema(client, path):
+    response = client.post(
+        path, json={"series": "not a list", "horizonDays": 9999}, headers={"X-AI-Service-Secret": "x" * 20}
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Missing or invalid service secret"}
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json", "/nope", "/admin"])
+def test_unauthenticated_callers_cannot_discover_routes_or_the_schema(client, path):
+    assert client.get(path).status_code == 401
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/openapi.json"])
+def test_the_generated_documentation_is_switched_off_even_with_the_secret(client, auth, path):
+    assert client.get(path, headers=auth).status_code == 404
+
+
+def test_health_stays_open_without_a_secret(client):
+    assert client.get("/health").status_code == 200
+
+
 @pytest.mark.parametrize("secret", ["", "short", "x" * 15, "   "])
 def test_empty_prefix_and_near_misses_are_rejected(client, secret):
     assert client.post("/train", json={}, headers={"X-AI-Service-Secret": secret}).status_code == 401
@@ -48,8 +73,10 @@ def test_secret_with_the_same_prefix_is_rejected(client, auth):
 
 
 def test_correct_secret_passes_authentication(client, auth):
-    # scaffold: routes exist but are not implemented yet (501, not 401/404)
-    assert client.post("/train", json={}, headers=auth).status_code == 501
+    # authenticated but nothing trained yet: a service error, never a 401
+    response = client.post("/forecast", json={"series": [{"productId": 1, "warehouseId": 1}]}, headers=auth)
+
+    assert response.status_code == 503
 
 
 @pytest.mark.parametrize("env", [{}, {"AI_SERVICE_SECRET": ""}, {"AI_SERVICE_SECRET": "too-short"}])
