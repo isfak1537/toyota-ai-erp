@@ -31,7 +31,9 @@ docs/          PRD, SRS, Build Plan (Markdown)
 # server
 cd server && npm install
 npm run dev                      # nodemon src/index.js (port 5001)
-npm test                         # jest + supertest, tests/ (no DB needed yet)
+npm test                         # unit + integration (needs TEST_DATABASE_URL, a *_test database)
+npm run test:unit                # no database
+npm run test:integration         # runs migrate deploy on the test DB, truncates between tests
 npm exec prisma -- validate
 npm exec prisma -- migrate dev --name <name>   # only after showing me the schema diff
 npm exec prisma -- generate
@@ -96,14 +98,15 @@ Keep `npm test` passing.
 ## Current status
 
 - P0 in progress (branch `phase-0-fixes`). Done: repo hygiene, D-05 (typed errors, central error
-  middleware, app/index split) for inventory, stock-transfer and procurement. Open for the P0 gate:
-  D-02, D-03, D-06, D-07 and the test database. Known defects: see SRS section 13.
+  middleware, app/index split), test database harness (1.3), D-02 (atomic stock changes for
+  receive, issue, adjust, reserve, release and transfer, with concurrency tests and CHECK
+  constraints). Open for the P0 gate: D-03, D-06, D-07. Known defects: see SRS section 13.
 - Update this section when a phase gate passes.
 
 ### Pending verification
 
-- P2003 (foreign key) -> 409 is verified only with a synthetic error. Add a real FK-violation
-  integration test once the test database exists (D-02 task).
-- Stock-changing write paths (receive, issue, adjust, reserve, release, transfer, goods receipt)
-  and their 409 mappings are verified only by code swap, not by real writes. Add real write tests
-  once the test database exists (task 1.3).
+- Goods receipt still updates inventory with read-then-write (lost updates possible) until D-03.
+- The `Inventory` CHECK-constraint migration is applied to the test database by the harness but
+  not yet to the dev database: run `npm exec prisma -- migrate deploy` in `server/`.
+- Prisma's query engine runs nested `include` queries concurrently on one transaction connection;
+  pg logs a deprecation warning that becomes an error in pg@9. Track upstream before upgrading pg.
