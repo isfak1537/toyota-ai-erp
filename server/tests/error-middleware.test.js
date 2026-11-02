@@ -139,6 +139,53 @@ describe("error middleware mapping", () => {
     });
   });
 
+  it("maps Prisma P2002 from @prisma/adapter-pg (constraint name, no meta.target)", async () => {
+    const adapterMeta = (index) => ({
+      modelName: "Product",
+      driverAdapterError: {
+        name: "DriverAdapterError",
+        cause: {
+          originalCode: "23505",
+          kind: "UniqueConstraintViolation",
+          constraint: { index },
+          table: "Product",
+        },
+      },
+    });
+
+    const app = buildApp((a) => {
+      a.get("/dup/:index", async (req) => {
+        throw Object.assign(new Error("unique"), {
+          code: "P2002",
+          meta: adapterMeta(req.params.index),
+        });
+      });
+    });
+
+    const sku = await request(app).get("/dup/Product_sku_key");
+    expect(sku.status).toBe(409);
+    expect(sku.body.message).toBe("Product SKU already exists");
+
+    const composite = await request(app).get("/dup/Inventory_productId_warehouseId_key");
+    expect(composite.status).toBe(409);
+    expect(composite.body.message).toBe("A record with the same unique value already exists");
+  });
+
+  it("maps PrismaClientValidationError to 400 without echoing Prisma internals", async () => {
+    const app = buildApp((a) => {
+      a.patch("/bad-field", async () => {
+        const error = new Error("Unknown argument `isActive`. Available options are marked with ?.");
+        error.name = "PrismaClientValidationError";
+        throw error;
+      });
+    });
+
+    const res = await request(app).patch("/bad-field").send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ success: false, message: "Invalid request data" });
+  });
+
   it("maps Prisma P2002 without meta.target to a generic 409", async () => {
     const app = buildApp((a) => {
       a.get("/dup", async () => {
