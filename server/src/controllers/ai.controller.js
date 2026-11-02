@@ -1,10 +1,11 @@
 const replenishment = require("../modules/ai/replenishment.service");
 const suggestions = require("../modules/ai/suggestion.service");
+const anomalies = require("../modules/ai/anomaly.service");
 const { parseId } = require("../utils/ids");
 const { parsePagination, toPagination } = require("../utils/pagination");
 const { ValidationError } = require("../errors/app-error");
 const { fieldDetails } = require("../utils/zod-details");
-const { listSuggestionsQuery } = require("../validators/ai.validator");
+const { listSuggestionsQuery, listAnomaliesQuery } = require("../validators/ai.validator");
 
 const parseQuery = (schema, query) => {
   const result = schema.safeParse(query);
@@ -58,4 +59,32 @@ const rejectSuggestion = async (req, res) => {
   });
 };
 
-module.exports = { runReplenishment, listSuggestions, approveSuggestion, rejectSuggestion };
+const syncAnomalies = async (req, res) => {
+  const data = await anomalies.syncAnomalies(req.body, req.user);
+
+  res.json({ success: true, message: `Synced ${data.flagged} flagged transaction(s)`, data });
+};
+
+const listAnomalies = async (req, res) => {
+  const filters = parseQuery(listAnomaliesQuery, req.query);
+  const pagination = parsePagination(req.query);
+  const { items, total } = await anomalies.listAnomalies({ ...filters, skip: pagination.skip, take: pagination.take });
+
+  res.json({ success: true, data: items, pagination: toPagination(pagination, total) });
+};
+
+const reviewAnomaly = async (req, res) => {
+  const data = await anomalies.reviewAnomaly(parseId(req.params.id, "Invalid anomaly ID"), req.body.note, req.user);
+
+  res.json({ success: true, message: data.idempotent ? "Anomaly was already reviewed" : "Anomaly reviewed", data });
+};
+
+module.exports = {
+  runReplenishment,
+  listSuggestions,
+  approveSuggestion,
+  rejectSuggestion,
+  syncAnomalies,
+  listAnomalies,
+  reviewAnomaly,
+};

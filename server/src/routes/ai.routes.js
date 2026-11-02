@@ -4,7 +4,7 @@ const controller = require("../controllers/ai.controller");
 const validate = require("../middlewares/validate.middleware");
 const { requireRole } = require("../middlewares/auth.middleware");
 const roles = require("../middlewares/roles");
-const { runReplenishmentSchema, approveSuggestionSchema, rejectSuggestionSchema } = require("../validators/ai.validator");
+const { runReplenishmentSchema, approveSuggestionSchema, rejectSuggestionSchema, syncAnomaliesSchema, reviewAnomalySchema } = require("../validators/ai.validator");
 
 const router = express.Router();
 
@@ -13,5 +13,9 @@ router.post("/replenishment/run", requireRole(...roles.PROCUREMENT), validate(ru
 router.get("/suggestions", controller.listSuggestions);
 router.post("/suggestions/:id/approve", requireRole(...roles.PROCUREMENT), validate(approveSuggestionSchema), controller.approveSuggestion);
 router.post("/suggestions/:id/reject", requireRole(...roles.PROCUREMENT), validate(rejectSuggestionSchema), controller.rejectSuggestion);
+
+router.post("/anomalies/sync", requireRole(...roles.ANOMALY_REVIEW), validate(syncAnomaliesSchema), controller.syncAnomalies);
+router.get("/anomalies", controller.listAnomalies);
+router.post("/anomalies/:id/review", requireRole(...roles.ANOMALY_REVIEW), validate(reviewAnomalySchema), controller.reviewAnomaly);
 
 module.exports = router;
