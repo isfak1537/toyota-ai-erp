@@ -1,5 +1,6 @@
 const { InventoryTransactionType } = require("@prisma/client");
 const prisma = require("../config/prisma");
+const inventoryRepository = require("../repositories/inventory.repository");
 const {
   ConflictError,
   NotFoundError,
@@ -26,11 +27,32 @@ const getInventoryOrThrow = async (tx, id) => {
   return inventory;
 };
 
+const inventoryInclude = {
+  product: true,
+  warehouse: {
+    include: {
+      factory: true,
+    },
+  },
+};
+
+// Called when an atomic stock change was rejected (applyDelta returned null).
+// The read only picks the right error; it never decides a write.
+const failStockChange = async (tx, productId, warehouseId, buildError) => {
+  const current = await tx.inventory.findUnique({
+    where: { productId_warehouseId: { productId, warehouseId } },
+  });
+
+  if (!current) {
+    throw new NotFoundError("Inventory record not found");
+  }
+
+  throw buildError(current);
+};
+
 const validateProductAndWarehouse = async (tx, productId, warehouseId) => {
-  const [product, warehouse] = await Promise.all([
-    tx.product.findUnique({ where: { id: productId } }),
-    tx.warehouse.findUnique({ where: { id: warehouseId } }),
-  ]);
+  const product = await tx.product.findUnique({ where: { id: productId } });
+  const warehouse = await tx.warehouse.findUnique({ where: { id: warehouseId } });
 
   if (!product) {
     throw new NotFoundError("Product not found");
@@ -140,6 +162,7 @@ const deleteInventory = async (id) => {
   });
 };
 
+
 const receiveStock = async ({
   productId,
   warehouseId,
@@ -155,34 +178,24 @@ const receiveStock = async ({
   return prisma.$transaction(async (tx) => {
     await validateProductAndWarehouse(tx, productId, warehouseId);
 
-    const inventory = await tx.inventory.findUnique({
-      where: {
-        productId_warehouseId: {
-          productId,
-          warehouseId,
-        },
-      },
+    const updated = await inventoryRepository.applyDelta(tx, {
+      productId,
+      warehouseId,
+      quantityDelta: quantity,
     });
 
-    if (!inventory) {
-      throw new NotFoundError("Inventory record not found");
+    if (!updated) {
+      await failStockChange(
+        tx,
+        productId,
+        warehouseId,
+        () => new ConflictError("Inventory record is in an inconsistent state")
+      );
     }
 
-    const newQuantity = inventory.quantity + quantity;
-
-    const updatedInventory = await tx.inventory.update({
-      where: { id: inventory.id },
-      data: {
-        quantity: newQuantity,
-      },
-      include: {
-        product: true,
-        warehouse: {
-          include: {
-            factory: true,
-          },
-        },
-      },
+    const inventory = await tx.inventory.findUnique({
+      where: { id: updated.id },
+      include: inventoryInclude,
     });
 
     const transaction = await tx.inventoryTransaction.create({
@@ -191,7 +204,7 @@ const receiveStock = async ({
         warehouseId,
         type: "RECEIPT",
         quantity,
-        balanceAfter: newQuantity,
+        balanceAfter: updated.quantity,
         referenceType: referenceType || "MANUAL_RECEIPT",
         referenceId: referenceId || null,
         reason: reason || null,
@@ -199,11 +212,12 @@ const receiveStock = async ({
     });
 
     return {
-      inventory: updatedInventory,
+      inventory,
       transaction,
     };
   });
 };
+
 
 const issueStock = async ({
   productId,
@@ -220,43 +234,25 @@ const issueStock = async ({
   return prisma.$transaction(async (tx) => {
     await validateProductAndWarehouse(tx, productId, warehouseId);
 
-    const inventory = await tx.inventory.findUnique({
-      where: {
-        productId_warehouseId: {
-          productId,
-          warehouseId,
-        },
-      },
+    const updated = await inventoryRepository.applyDelta(tx, {
+      productId,
+      warehouseId,
+      quantityDelta: -quantity,
     });
 
-    if (!inventory) {
-      throw new NotFoundError("Inventory record not found");
+    if (!updated) {
+      await failStockChange(tx, productId, warehouseId, (current) => {
+        const availableQuantity = current.quantity - current.reservedQuantity;
+
+        return new ConflictError(
+          `Insufficient available stock. Available: ${availableQuantity}, requested: ${quantity}`
+        );
+      });
     }
 
-    const availableQuantity =
-      inventory.quantity - inventory.reservedQuantity;
-
-    if (quantity > availableQuantity) {
-      throw new ConflictError(
-        `Insufficient available stock. Available: ${availableQuantity}, requested: ${quantity}`
-      );
-    }
-
-    const newQuantity = inventory.quantity - quantity;
-
-    const updatedInventory = await tx.inventory.update({
-      where: { id: inventory.id },
-      data: {
-        quantity: newQuantity,
-      },
-      include: {
-        product: true,
-        warehouse: {
-          include: {
-            factory: true,
-          },
-        },
-      },
+    const inventory = await tx.inventory.findUnique({
+      where: { id: updated.id },
+      include: inventoryInclude,
     });
 
     const transaction = await tx.inventoryTransaction.create({
@@ -265,7 +261,7 @@ const issueStock = async ({
         warehouseId,
         type: "ISSUE",
         quantity: -quantity,
-        balanceAfter: newQuantity,
+        balanceAfter: updated.quantity,
         referenceType: referenceType || "MANUAL_ISSUE",
         referenceId: referenceId || null,
         reason: reason || null,
@@ -273,7 +269,7 @@ const issueStock = async ({
     });
 
     return {
-      inventory: updatedInventory,
+      inventory,
       transaction,
     };
   });
