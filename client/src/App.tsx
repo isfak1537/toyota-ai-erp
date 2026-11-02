@@ -1,6 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter } from 'react-router'
+import { BrowserRouter, Route, Routes } from 'react-router'
 import { AuthProvider } from './auth/AuthProvider'
+import { RequireAuth } from './auth/RequireAuth'
+import { Layout } from './components/Layout'
+import Login from './pages/Login'
+import NotFound from './pages/NotFound'
+import Placeholder from './pages/Placeholder'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -13,12 +18,26 @@ const queryClient = new QueryClient({
   },
 })
 
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route element={<RequireAuth />}>
+        <Route element={<Layout />}>
+          <Route index element={<Placeholder />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Route>
+    </Routes>
+  )
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <main className="main__inner">Toyota AI ERP</main>
+          <AppRoutes />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
