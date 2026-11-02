@@ -9,7 +9,8 @@
     "test:unit": "jest --selectProjects unit",
     "test:integration": "jest --selectProjects integration --runInBand",
     "seed:synthetic": "node prisma/seed/generate.js",
-    "reconcile": "node scripts/reconcile.js"
+    "reconcile": "node scripts/reconcile.js",
+    "seed:export-fixtures": "node scripts/export-fixtures.js"
   },
   "jest": {
     "projects": [
