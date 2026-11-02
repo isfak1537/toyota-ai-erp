@@ -258,9 +258,9 @@ SalesOrder(+Item). The Prisma schema remains the source of truth.
 - All write requests validated with Zod; validation errors return 400
   with field details.
 
-- Error classes map to status codes centrally (400 validation/business
-  rule, 401, 403, 404, 409 conflict/duplicate, 500); no status codes
-  derived from message text.
+- Error classes map to status codes centrally (400 malformed input or
+  static validation rule; 401; 403; 404; 409 duplicate or state
+  conflict; 500); no status codes derived from message text.
 
 - List endpoints support pagination (page, pageSize ≤ 100) and filters.
 

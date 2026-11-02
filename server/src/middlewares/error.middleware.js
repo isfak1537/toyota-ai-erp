@@ -1,55 +1,72 @@
-const errorMiddleware = (err, req, res, next) => {
-  console.error(err);
+const { ZodError } = require("zod");
+const { AppError } = require("../errors/app-error");
 
-  /*
-  |--------------------------------------------------------------------------
-  | Prisma Unique Constraint Error
-  |--------------------------------------------------------------------------
-  */
+const uniqueViolationMessage = (target) => {
+  const fields = Array.isArray(target) ? target : [];
 
-  if (err.code === "P2002") {
-    const target = err.meta?.target;
+  if (fields.includes("sku")) return "Product SKU already exists";
+  if (fields.includes("name")) return "Category name already exists";
+  if (fields.includes("code")) return "A record with this code already exists";
+  if (fields.includes("email")) return "A record with this email already exists";
 
-    let message =
-      "A record with the same unique value already exists";
+  return "A record with the same unique value already exists";
+};
 
-    if (Array.isArray(target)) {
-      if (target.includes("sku")) {
-        message = "Product SKU already exists";
-      } else if (target.includes("name")) {
-        message = "Category name already exists";
-      } else if (target.includes("code")) {
-        message = "A record with this code already exists";
-      } else if (target.includes("email")) {
-        message = "A record with this email already exists";
-      }
+const zodDetails = (error) =>
+  error.issues.reduce((acc, issue) => {
+    const field = issue.path.join(".");
+
+    if (field && !(field in acc)) {
+      acc[field] = issue.message;
     }
 
-    return res.status(409).json({
-      success: false,
-      message,
-    });
+    return acc;
+  }, {});
+
+const errorMiddleware = (err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | General Application Errors
-  |--------------------------------------------------------------------------
-  */
+  const respond = (statusCode, message, errors) => {
+    const body = { success: false, message };
 
-  const statusCode = err.statusCode || 500;
+    if (errors && Object.keys(errors).length > 0) {
+      body.errors = errors;
+    }
 
-  const response = {
-    success: false,
-    message:
-      err.message || "Internal server error",
+    return res.status(statusCode).json(body);
   };
 
-  if (err.details) {
-    response.errors = err.details;
+  if (err instanceof AppError) {
+    return respond(err.statusCode, err.message, err.details);
   }
 
-  res.status(statusCode).json(response);
+  if (err instanceof ZodError) {
+    return respond(400, "Validation failed", zodDetails(err));
+  }
+
+  if (err?.code === "P2002") {
+    return respond(409, uniqueViolationMessage(err.meta?.target));
+  }
+
+  if (err?.code === "P2025") {
+    return respond(404, "Record not found");
+  }
+
+  if (err?.type === "entity.parse.failed") {
+    return respond(400, "Malformed JSON body");
+  }
+
+  // Legacy modules (product, category, ...) still set statusCode/details on a
+  // plain Error. Remove this branch once they throw AppError subclasses.
+  if (Number.isInteger(err?.statusCode) && err.statusCode >= 400 && err.statusCode < 500) {
+    return respond(err.statusCode, err.message, err.details);
+  }
+
+  console.error(err);
+
+  return respond(500, "Internal server error");
 };
 
 module.exports = errorMiddleware;

@@ -1,13 +1,11 @@
+const { ValidationError } = require("../errors/app-error");
+
 const validate = (schema) => {
   return (req, res, next) => {
     const result = schema.safeParse(req.body);
 
     if (!result.success) {
-      const error = new Error("Validation failed");
-
-      error.statusCode = 400;
-
-      error.details = result.error.issues.reduce((acc, issue) => {
+      const details = result.error.issues.reduce((acc, issue) => {
         const field = issue.path[0];
 
         if (field) {
@@ -17,7 +15,7 @@ const validate = (schema) => {
         return acc;
       }, {});
 
-      return next(error);
+      return next(new ValidationError("Validation failed", details));
     }
 
     req.body = result.data;
