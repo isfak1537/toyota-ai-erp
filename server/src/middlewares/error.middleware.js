@@ -40,6 +40,19 @@ const uniqueViolationMessage = (fields) => {
   return "A record with the same unique value already exists";
 };
 
+// A numeric value that fits the request bounds but not the column (integer
+// stock totals, Decimal(14,2) amounts). ORM writes raise P2020; raw SQL such as
+// applyDelta raises P2010; both carry the Postgres 22003 cause from the adapter.
+const isValueOutOfRange = (err) => {
+  const cause = err?.meta?.driverAdapterError?.cause;
+
+  return (
+    err?.code === "P2020" ||
+    cause?.kind === "ValueOutOfRange" ||
+    cause?.originalCode === "22003"
+  );
+};
+
 const errorMiddleware = (err, req, res, next) => {
   if (res.headersSent) {
     return next(err);
@@ -69,6 +82,10 @@ const errorMiddleware = (err, req, res, next) => {
 
   if (err?.code === "P2003") {
     return respond(409, "Related record conflict");
+  }
+
+  if (isValueOutOfRange(err)) {
+    return respond(400, "A numeric value is outside the allowed range");
   }
 
   if (err?.code === "P2025") {

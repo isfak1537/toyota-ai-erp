@@ -215,6 +215,41 @@ describe("error middleware mapping", () => {
     expect(res.body).toEqual({ success: false, message: "Related record conflict" });
   });
 
+  it.each([
+    ["ORM write (P2020)", { code: "P2020", meta: { driverAdapterError: { cause: { originalCode: "22003", kind: "ValueOutOfRange" } } } }],
+    ["raw query (P2010)", { code: "P2010", meta: { driverAdapterError: { cause: { originalCode: "22003", kind: "ValueOutOfRange" } } } }],
+    ["P2020 without adapter details", { code: "P2020" }],
+  ])("maps a numeric out-of-range error to 400: %s", async (label, props) => {
+    const app = buildApp((a) => {
+      a.get("/range", async () => {
+        throw Object.assign(new Error("integer out of range at SELECT secret"), props);
+      });
+    });
+
+    const res = await request(app).get("/range");
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      success: false,
+      message: "A numeric value is outside the allowed range",
+    });
+  });
+
+  it("does not treat other raw-query failures as out-of-range", async () => {
+    const app = buildApp((a) => {
+      a.get("/raw", async () => {
+        throw Object.assign(new Error("check violation"), {
+          code: "P2010",
+          meta: { driverAdapterError: { cause: { originalCode: "23514" } } },
+        });
+      });
+    });
+
+    const res = await request(app).get("/raw");
+
+    expect(res.status).toBe(500);
+  });
+
   it("maps Prisma P2025 to 404", async () => {
     const app = buildApp((a) => {
       a.get("/gone", async () => {
