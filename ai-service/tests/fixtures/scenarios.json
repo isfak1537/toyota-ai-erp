@@ -1,0 +1,27 @@
+{
+  "note": "Seed scenario profile per product. STEERED products have their last 12 days of demand shaped by the seed generator (SEED-007), so their last-days behaviour is synthetic demand shaping, not natural demand.",
+  "steeredProfiles": [
+    "NEAR_ROP",
+    "TREND_FAST"
+  ],
+  "profiles": {
+    "SYN-BRK-001": "NEAR_ROP",
+    "SYN-BRK-002": "STABLE",
+    "SYN-BRK-003": "TRENDING",
+    "SYN-BRK-004": "STABLE",
+    "SYN-BRK-005": "STABLE",
+    "SYN-BRK-006": "TRENDING",
+    "SYN-ENG-001": "NEAR_ROP",
+    "SYN-ENG-002": "STABLE",
+    "SYN-ENG-003": "TREND_FAST",
+    "SYN-ENG-004": "NEAR_ROP",
+    "SYN-ENG-005": "OVERSTOCKED",
+    "SYN-ENG-006": "STABLE",
+    "SYN-ENG-007": "TRENDING",
+    "SYN-ELE-001": "NEAR_ROP",
+    "SYN-ELE-002": "STABLE",
+    "SYN-ELE-003": "TRENDING",
+    "SYN-ELE-004": "STABLE",
+    "SYN-ELE-005": "STABLE"
+  }
+}

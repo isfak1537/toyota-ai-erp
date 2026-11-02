@@ -1,0 +1,19 @@
+id,sku,name
+1,SYN-BRK-001,Brake Pad Set Front
+2,SYN-BRK-002,Brake Disc Rotor
+3,SYN-BRK-003,Shock Absorber Front
+4,SYN-BRK-004,Control Arm Assembly
+5,SYN-BRK-005,Wheel Bearing Kit
+6,SYN-BRK-006,Brake Caliper Rebuild Kit
+7,SYN-ENG-001,Oil Filter
+8,SYN-ENG-002,Air Filter
+9,SYN-ENG-003,Cabin Air Filter
+10,SYN-ENG-004,Spark Plug Set (4 pcs)
+11,SYN-ENG-005,Timing Belt Kit
+12,SYN-ENG-006,Fuel Pump Module
+13,SYN-ENG-007,Water Pump
+14,SYN-ELE-001,Battery 12V 60Ah
+15,SYN-ELE-002,Alternator
+16,SYN-ELE-003,Headlamp Assembly
+17,SYN-ELE-004,Wiper Blade Set
+18,SYN-ELE-005,Side Mirror Assembly

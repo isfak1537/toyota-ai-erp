@@ -23,7 +23,7 @@ server/        Node.js + Express 5 (CommonJS) + Prisma 7 + PostgreSQL
     modules/ai/   (new) replenishment, suggestions, llm.provider, ai.client
   prisma/seed/  synthetic data generator (deterministic), writer, CLI, anomaly-labels.json
   scripts/      reconcile.js
-ai-service/    (new, P2) Python FastAPI: forecasting + anomaly models
+ai-service/    Python FastAPI (P2/P3): forecasting + anomaly models, read-only DB role, shared-secret API
 docs/          PRD, SRS, Build Plan (Markdown)
 ```
 
@@ -48,8 +48,13 @@ npm run reconcile                # inventory = last ledger balance + chain/docum
 # client
 cd client && npm install && npm run dev   # port 5173
 
-# ai-service (from P2)
-cd ai-service && pip install -r requirements.txt && uvicorn app.main:app --reload --port 8000
+# ai-service (P2/P3)  -- create the venv with an EXPLICIT python >= 3.11 (python.org or pyenv build, see below)
+cd ai-service && /path/to/python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/uvicorn app.main:app --reload --port 8000    # needs ai-service/.env (AI_DB_URL, AI_SERVICE_SECRET)
+.venv/bin/pytest                                       # unit + API tests; -m db (real read-only role), -m slow (notebooks)
+.venv/bin/python scripts/build_notebooks.py            # executes notebooks/01_forecast_eval, 02_anomaly_eval
+.venv/bin/python scripts/build_report.py               # regenerates ai-service/REPORT.md
+cd server && npm run seed:export-fixtures              # regenerates ai-service/tests/fixtures (a test fails on drift)
 ```
 
 Always run Prisma from `server/` using the project's local binary (`npm exec prisma -- <cmd>` or
@@ -103,16 +108,23 @@ Keep `npm test` passing.
 
 ## Current status
 
-- P0 is merged and tagged `m1-stable-core` (typed errors, atomic stock changes, locked goods
-  receipt, Decimal money, Zod writes and pagination, cumulative PO cap, test database harness).
-- P1 (synthetic data) is built on branch `phase-1-seed` and waits for the owner's confirmation:
-  deterministic generator (`prisma/seed/`), `npm run seed:synthetic`, `npm run reconcile`,
-  committed `anomaly-labels.json`. The old `prisma/seed.js` / `db:seed` is retired.
-- Next: P2 (Python AI service: forecasting). Update this section when a phase gate passes.
+- P0 is merged and tagged `m1-stable-core`; P1 (synthetic data and reconcile) is merged and tagged `m2-seed`.
+- P2 + P3 (AI service, branch `phase-2-ai-service`):
+  `GET /health`, `POST /forecast`, `POST /anomalies/score`, `POST /train` behind `X-AI-Service-Secret`; global
+  gradient-boosting forecast vs a moving-average baseline (14-day holdout, nested selection estimate, sigma from
+  residuals); rules R1-R5 + an Isolation Forest risk score with a weekly review queue (top 10 per local week, top contributing features), evaluated against `anomaly-labels.json`; model registry
+  with deterministic versions; notebooks and `ai-service/REPORT.md`. The ERP API does not call it yet (P4).
+- P2 + P3 passed their gate and are merged and tagged `m3-ai-models` (live end-to-end run through the read-only role: green).
+- Next: P4 (ERP AI module: replenishment, suggestions, approval, minimal auth). Update this section when a phase gate passes.
 
 ### Pending verification
 
 - None.
+
+### P6 checklist (UI)
+
+- Anomalies page: show rule flags and the model review queue in **separate tabs** ("Confirmed rule hits" vs "Weekly review queue"), never as one list.
+- SEED-008: label the demo data as synthetic (footer or about page).
 
 ### Known gaps (not blocking)
 
@@ -143,3 +155,14 @@ Keep `npm test` passing.
   deployment (P7).
 - Prisma's query engine runs nested `include` queries concurrently on one transaction connection;
   pg logs a deprecation warning that becomes an error in pg@9. Track upstream before upgrading pg.
+- AI service results to decide on (see `ai-service/REPORT.md`): per-series model selection as written in AI-003 is
+  optimistic (nested estimate 1.414 vs 1.317 for always using the ML model); after the second anomaly pass the
+  rules catch 7 of 8 and the weekly queue 6 of 8 (together 8 of 8), but flags rose from 33 to 147 and combined precision fell
+  from 0.18 to 0.05; most of the recall gain comes from not scoring document-linked receipts, which blinds the model to a wrong
+  receipt that has a document. Rule R2 fires on ordinary tail events; a days-of-demand criterion is an owner decision to revisit with real data.
+  Thresholds were deliberately not tuned on 8 labels.
+- The AI service stores models as joblib pickles under `ai-service/models/` (gitignored): load only artefacts it trained
+  itself. `/train` is synchronous (seconds on this data) and one run at a time.
+- Python environment: the service was built and tested on python.org 3.13.5; that is fine for now and the hosting runtime is decided in P7. Homebrew's Python 3.12.16 and 3.14.7 have an
+  empty `platform.mac_ver()` on macOS 26 and break pip inside venvs; use a python.org or pyenv build.
+- The AI service reads the whole ledger series it is asked about; fine for the MVP, add a date window when ledgers grow.

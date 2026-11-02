@@ -1,0 +1,27 @@
+{
+  "provenance": "Measured once on commit 5b78db1 (rules R1-R4, Isolation Forest with a fixed 0.5% contamination cut) on the same synthetic fixtures. Recorded for the before/after comparison in REPORT.md; never regenerated.",
+  "commit": "5b78db1",
+  "transactions": 2978,
+  "labelled": 8,
+  "detectors": {
+    "rules": {"caught": 6, "missed": 2, "false_positives": 13, "precision": 0.316, "recall": 0.75},
+    "model": {"caught": 0, "missed": 8, "false_positives": 14, "precision": 0.0, "recall": 0.0},
+    "combined": {"caught": 6, "missed": 2, "false_positives": 27, "precision": 0.182, "recall": 0.75}
+  },
+  "flags": {"total": 33, "rules": 19, "model": 14},
+  "ranking": {"roc_auc": 0.8494, "average_precision": 0.03479, "random_average_precision": 0.002687, "recall_at_k": {"10": 0, "20": 0, "50": 2}},
+  "by_type_detected_rules_model_combined": {
+    "DUPLICATE_ISSUE": [0, 0, 0],
+    "MANUAL_RECEIPT": [1, 0, 1],
+    "NEGATIVE_ADJUSTMENT": [2, 0, 2],
+    "OFF_HOURS_ISSUE": [2, 0, 2],
+    "SPIKE_ISSUE": [1, 0, 1]
+  },
+  "false_positive_causes": {
+    "RULE ISSUE ordinary large movement": 10,
+    "MODEL RECEIPT opening stock": 8,
+    "MODEL RECEIPT large goods receipt": 6,
+    "RULE ISSUE last-day trim": 2,
+    "RULE ADJUSTMENT routine cycle count": 1
+  }
+}
