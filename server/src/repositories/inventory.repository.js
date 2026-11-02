@@ -89,8 +89,25 @@ const applyDelta = async (
   return rows[0] ?? null;
 };
 
+// Atomic "add stock, creating the row if needed" (transfer destination).
+// INSERT ... ON CONFLICT lets concurrent first-time transfers to the same
+// product and warehouse all succeed instead of racing on the unique key.
+const increaseOrCreate = async (tx, { productId, warehouseId, quantity }) => {
+  const rows = await tx.$queryRaw`
+    INSERT INTO "Inventory" ("productId", "warehouseId", "quantity", "reservedQuantity", "updatedAt")
+    VALUES (${productId}::int, ${warehouseId}::int, ${quantity}::int, 0, (NOW() AT TIME ZONE 'UTC'))
+    ON CONFLICT ("productId", "warehouseId") DO UPDATE
+    SET "quantity" = "Inventory"."quantity" + EXCLUDED."quantity",
+        "updatedAt" = EXCLUDED."updatedAt"
+    RETURNING *
+  `;
+
+  return rows[0];
+};
+
 module.exports = {
   applyDelta,
+  increaseOrCreate,
   findInventoryByProductAndWarehouse,
   createInventory,
   getAllInventory,

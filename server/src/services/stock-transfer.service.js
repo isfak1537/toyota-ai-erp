@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const prisma = require("../config/prisma");
+const inventoryRepository = require("../repositories/inventory.repository");
 const {
   ConflictError,
   NotFoundError,
@@ -6,7 +8,7 @@ const {
 } = require("../errors/app-error");
 
 const generateTransferNumber = () => {
-  return `TRF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  return `TRF-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 };
 
 const completeTransfer = async ({
@@ -44,15 +46,28 @@ const completeTransfer = async ({
     }
   }
 
+  const lines = items
+    .map((item) => ({
+      productId: Number(item.productId),
+      quantity: Number(item.quantity),
+    }))
+    .sort((a, b) => a.productId - b.productId);
+
+  for (let i = 1; i < lines.length; i += 1) {
+    if (lines[i].productId === lines[i - 1].productId) {
+      throw new ValidationError(
+        `Product ${lines[i].productId} appears more than once in the transfer`
+      );
+    }
+  }
+
   return prisma.$transaction(async (tx) => {
-    const [fromWarehouse, toWarehouse] = await Promise.all([
-      tx.warehouse.findUnique({
-        where: { id: fromWarehouseId },
-      }),
-      tx.warehouse.findUnique({
-        where: { id: toWarehouseId },
-      }),
-    ]);
+    const fromWarehouse = await tx.warehouse.findUnique({
+      where: { id: fromWarehouseId },
+    });
+    const toWarehouse = await tx.warehouse.findUnique({
+      where: { id: toWarehouseId },
+    });
 
     if (!fromWarehouse) {
       throw new NotFoundError("Source warehouse not found");
@@ -66,12 +81,13 @@ const completeTransfer = async ({
       throw new ConflictError("Both warehouses must be active");
     }
 
+    // Inventory rows are locked in one global order (productId, then
+    // warehouseId) so concurrent opposite-direction transfers cannot deadlock:
+    // lines are sorted by product and the lower warehouse row is touched first.
+    const sourceFirst = fromWarehouseId < toWarehouseId;
     const transferItems = [];
 
-    for (const item of items) {
-      const productId = Number(item.productId);
-      const quantity = Number(item.quantity);
-
+    for (const { productId, quantity } of lines) {
       const product = await tx.product.findUnique({
         where: { id: productId },
       });
@@ -86,76 +102,59 @@ const completeTransfer = async ({
         );
       }
 
-      const sourceInventory = await tx.inventory.findUnique({
-        where: {
-          productId_warehouseId: {
-            productId,
-            warehouseId: fromWarehouseId,
+      const takeFromSource = async () => {
+        const updated = await inventoryRepository.applyDelta(tx, {
+          productId,
+          warehouseId: fromWarehouseId,
+          quantityDelta: -quantity,
+        });
+
+        if (updated) {
+          return updated;
+        }
+
+        const current = await tx.inventory.findUnique({
+          where: {
+            productId_warehouseId: { productId, warehouseId: fromWarehouseId },
           },
-        },
-      });
+        });
 
-      if (!sourceInventory) {
-        throw new NotFoundError(
-          `No inventory found for product ${productId} in source warehouse`
-        );
-      }
+        if (!current) {
+          throw new NotFoundError(
+            `No inventory found for product ${productId} in source warehouse`
+          );
+        }
 
-      const available =
-        sourceInventory.quantity -
-        sourceInventory.reservedQuantity;
+        const available = current.quantity - current.reservedQuantity;
 
-      if (quantity > available) {
         throw new ConflictError(
           `Insufficient stock for product ${productId}. Available: ${available}, requested: ${quantity}`
         );
-      }
+      };
 
-      let destinationInventory = await tx.inventory.findUnique({
-        where: {
-          productId_warehouseId: {
-            productId,
-            warehouseId: toWarehouseId,
-          },
-        },
-      });
-
-      if (!destinationInventory) {
-        destinationInventory = await tx.inventory.create({
-          data: {
-            productId,
-            warehouseId: toWarehouseId,
-            quantity: 0,
-            reservedQuantity: 0,
-          },
+      const addToDestination = () =>
+        inventoryRepository.increaseOrCreate(tx, {
+          productId,
+          warehouseId: toWarehouseId,
+          quantity,
         });
+
+      let source;
+      let destination;
+
+      if (sourceFirst) {
+        source = await takeFromSource();
+        destination = await addToDestination();
+      } else {
+        destination = await addToDestination();
+        source = await takeFromSource();
       }
-
-      const newSourceQuantity =
-        sourceInventory.quantity - quantity;
-
-      const newDestinationQuantity =
-        destinationInventory.quantity + quantity;
-
-      await tx.inventory.update({
-        where: { id: sourceInventory.id },
-        data: {
-          quantity: newSourceQuantity,
-        },
-      });
-
-      await tx.inventory.update({
-        where: { id: destinationInventory.id },
-        data: {
-          quantity: newDestinationQuantity,
-        },
-      });
 
       transferItems.push({
         productId,
         quantity,
-        sourceBalanceAfter: newSourceQuantity,
-        destinationBalanceAfter: newDestinationQuantity,
+        sourceBalanceAfter: source.quantity,
+        destinationBalanceAfter: destination.quantity,
       });
     }
 
@@ -167,9 +166,9 @@ const completeTransfer = async ({
         status: "COMPLETED",
         notes: notes || null,
         items: {
-          create: items.map((item) => ({
-            productId: Number(item.productId),
-            quantity: Number(item.quantity),
+          create: lines.map(({ productId, quantity }) => ({
+            productId,
+            quantity,
           })),
         },
       },
