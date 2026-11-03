@@ -16,6 +16,14 @@ from typing import Protocol, Sequence
 
 import pandas as pd
 
+# Demo-preparation movements (server `npm run demo:prepare` / `demo:undo`) are real ledger rows that drain
+# or restore stock on purpose to stage a demo. They are not demand and not events to score, so the AI service
+# never sees them: not in the demand series, not in anomaly scoring or the review queue, not in training, and
+# not when it works out the latest day of data. Everything else reads the ledger through this module.
+EXCLUDED_REFERENCE_TYPES = ("DEMO_PREPARE", "DEMO_PREPARE_UNDO")
+_EXCLUDED_SQL = ", ".join(f"'{t}'" for t in EXCLUDED_REFERENCE_TYPES)
+NOT_DEMO_SQL = f'("referenceType" IS NULL OR "referenceType" NOT IN ({_EXCLUDED_SQL}))'
+
 LEDGER_COLUMNS = [
     "id",
     "product_id",
@@ -37,7 +45,7 @@ LEDGER_SQL = (
 PRODUCTS_SQL = 'SELECT "id", "sku", "name" FROM "Product" ORDER BY "id"'
 WAREHOUSES_SQL = 'SELECT "id", "code", "name" FROM "Warehouse" ORDER BY "id"'
 
-LATEST_SQL = 'SELECT MAX("createdAt") AS latest FROM "InventoryTransaction"'
+LATEST_SQL = f'SELECT MAX("createdAt") AS latest FROM "InventoryTransaction" WHERE {NOT_DEMO_SQL}'
 
 ALL_SQL = (LEDGER_SQL, PRODUCTS_SQL, WAREHOUSES_SQL, LATEST_SQL)
 
@@ -62,7 +70,8 @@ class LedgerSource(Protocol):
 
 
 def _normalise_ledger(frame: pd.DataFrame) -> pd.DataFrame:
-    frame = frame[LEDGER_COLUMNS].copy()
+    frame = frame[LEDGER_COLUMNS]
+    frame = frame[~frame["reference_type"].isin(EXCLUDED_REFERENCE_TYPES)].copy()
     frame["created_at"] = pd.to_datetime(frame["created_at"], utc=True).dt.tz_localize(None)
     frame["quantity"] = frame["quantity"].astype("int64")
     frame["balance_after"] = frame["balance_after"].astype("int64")
@@ -146,7 +155,7 @@ class PostgresSource:
         created_from: pd.Timestamp | None = None,
         created_to: pd.Timestamp | None = None,
     ) -> pd.DataFrame:
-        conditions, params = [], []
+        conditions, params = [NOT_DEMO_SQL], []  # demo-preparation rows never leave the database
 
         if created_from is not None:
             conditions.append('"createdAt" >= %s')
