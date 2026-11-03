@@ -9,6 +9,32 @@ const env = {
   port: Number(process.env.PORT) || 5001,
   clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
 
+  // CLIENT_URL may list several browser origins separated by commas (for example the production site and a
+  // preview deployment). Only these origins may call the API from a browser.
+  get clientOrigins() {
+    return (process.env.CLIENT_URL || "http://localhost:5173")
+      .split(",")
+      .map((origin) => origin.trim().replace(/\/+$/, ""))
+      .filter(Boolean);
+  },
+
+  // Behind a proxy (Vercel, Render) req.ip is the proxy unless the app trusts it, which would make every user
+  // share one login-attempt budget. TRUST_PROXY=1 trusts one hop. Off by default: never trust it on a bare server.
+  get trustProxy() {
+    const value = (process.env.TRUST_PROXY || "").trim().toLowerCase();
+
+    if (/^\d+$/.test(value)) return Number(value);
+
+    return value === "true" ? 1 : false;
+  },
+
+  // Connections per server process. A serverless function should use 1 to 3 (with the pooled database URL).
+  get dbPoolMax() {
+    const max = Number(process.env.DB_POOL_MAX);
+
+    return Number.isInteger(max) && max > 0 ? max : 10;
+  },
+
   get jwtSecret() {
     const secret = process.env.JWT_SECRET;
 

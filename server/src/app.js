@@ -21,9 +21,24 @@ const roles = require("./middlewares/roles");
 
 const app = express();
 
+app.disable("x-powered-by");
+app.set("trust proxy", env.trustProxy);
+
+// The API only returns JSON for a logged-in client: nothing here should be framed, sniffed or cached.
+app.use((req, res, next) => {
+  res.set({
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+  });
+
+  next();
+});
+
 app.use(
   cors({
-    origin: env.clientUrl,
+    origin: env.clientOrigins,
   })
 );
 

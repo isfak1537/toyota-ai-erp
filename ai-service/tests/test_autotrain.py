@@ -103,3 +103,24 @@ def test_the_log_line_names_no_secret_or_connection_string(tmp_path, caplog):
 
     assert "hunter2" not in caplog.text and "postgresql://" not in caplog.text
     assert "could not train forecast (ConnectionError)" in caplog.text
+
+
+def test_the_render_blueprint_matches_how_the_service_is_started_and_holds_no_secret():
+    from pathlib import Path
+
+    text = (Path(__file__).parent.parent / "render.yaml").read_text()
+
+    assert "rootDir: ai-service" in text and "plan: free" in text and "healthCheckPath: /health" in text
+    assert "startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT" in text
+    assert 'key: AI_AUTOTRAIN\n        value: "true"' in text and "value: /tmp/models" in text
+    import re
+
+    for secret in ("AI_SERVICE_SECRET", "AI_DB_URL"):  # asked for in the dashboard, never written here
+        assert re.search(rf"key: {secret}[^\n]*\n\s+sync: false", text), secret
+    assert "postgres" not in text.lower().replace("postgres(ql)", "")
+
+
+def test_the_env_example_documents_autotrain_off_by_default():
+    from pathlib import Path
+
+    assert "AI_AUTOTRAIN=false" in (Path(__file__).parent.parent / ".env.example").read_text()

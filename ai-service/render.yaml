@@ -1,0 +1,25 @@
+# Render Blueprint for the AI service (free web service). See docs/deployment.md.
+# Render's free web services have no persistent disk and spin down after 15 minutes without traffic,
+# so models live in /tmp and the service trains the missing ones itself on every start (AI_AUTOTRAIN).
+services:
+  - type: web
+    name: toyota-erp-ai-service
+    runtime: python
+    plan: free
+    rootDir: ai-service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: AI_AUTOTRAIN
+        value: "true"
+      - key: AI_MODEL_DIR
+        value: /tmp/models
+      - key: AI_TZ_OFFSET_HOURS
+        value: "6"
+      - key: AI_SERVICE_SECRET # the same value as AI_SERVICE_SECRET on the ERP API; at least 16 characters
+        sync: false
+      - key: AI_DB_URL # the read-only role's connection string (sql/create_ai_readonly_role.sql)
+        sync: false

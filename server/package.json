@@ -15,7 +15,9 @@
     "test:live": "jest --selectProjects live",
     "test:loop": "bash scripts/test-loop.sh",
     "demo:prepare": "node scripts/demo.js prepare",
-    "demo:undo": "node scripts/demo.js undo"
+    "demo:undo": "node scripts/demo.js undo",
+    "postinstall": "prisma generate",
+    "db:migrate:deploy": "prisma migrate deploy"
   },
   "jest": {
     "projects": [
