@@ -1,4 +1,4 @@
-import type { DaysOfCover, InventoryRow, LatestRun, ReviewSeries, Suggestion } from '../api/types'
+import type { AnomalyFlag, DaysOfCover, InventoryRow, LatestRun, ReviewSeries, Suggestion } from '../api/types'
 
 const product = (id: number, sku: string, name: string, reorderLevel: number) => ({ id, sku, name, unit: 'pcs', price: '10.00', reorderLevel, minStock: 0, isActive: true })
 const warehouse = { id: 1, code: 'SYN-MAIN', name: 'Main warehouse' }
@@ -46,4 +46,11 @@ export const suggestion = (over: Partial<Suggestion> = {}): Suggestion => ({
   explanationSource: 'LLM:groq:openai/gpt-oss-120b', status: 'PENDING', rejectReason: null, decidedAt: null, requisitionId: null, createdAt: '2026-11-02T10:00:00Z',
   inputs: { outcome: 'SUGGEST', rawQty: 60, onOrder: { exact: 0, method: 'NONE', rounding: 'floor' } },
   product: { id: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly', unit: 'pcs' }, warehouse: { id: 1, code: 'SYN-MAIN', name: 'Main warehouse' }, supplier: { id: 2, code: 'SYN-S2', name: 'Orient Parts Co.' }, ...over,
+})
+
+export const flag = (over: Partial<AnomalyFlag> = {}): AnomalyFlag => ({
+  id: 1, inventoryTransactionId: 11, score: 0.93, reason: 'Issue of 10 units is 10.0x the usual 1 for this product (robust z 9.0)', source: 'BOTH', ruleCodes: ['R2'], queueRank: 2, period: '2026-11-01/2026-11-07',
+  topFeatures: [{ feature: 'size as a multiple of the usual', value: 10, typical: 1, contribution: 0.3 }], modelVersion: 'anomaly-1', explanation: 'A 10-unit issue is far larger than the usual single unit.',
+  explanationSource: 'LLM:groq:openai/gpt-oss-120b', status: 'OPEN', reviewedAt: null, reviewNote: null, reviewedBy: null,
+  transaction: { id: 11, type: 'ISSUE', quantity: -10, balanceAfter: 40, createdAt: '2026-11-01T10:30:00Z', product: { id: 3, sku: 'SYN-ELE-001', name: 'Battery 12V 60Ah' }, warehouse: { id: 1, code: 'SYN-MAIN', name: 'Main' } }, ...over,
 })

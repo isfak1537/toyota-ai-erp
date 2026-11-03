@@ -13,6 +13,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Inventory', icon: '▦', section: 'Operations' },
   { to: '/suggestions', label: 'AI suggestions', icon: '✦', section: 'AI' },
+  { to: '/anomalies', label: 'Anomalies', icon: '◬', section: 'AI' },
 ]
 
 export const navFor = (role: Role | undefined) => NAV_ITEMS.filter((item) => !item.needs || can(role, item.needs))

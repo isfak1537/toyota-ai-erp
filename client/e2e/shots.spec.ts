@@ -29,3 +29,16 @@ test('procurement officer: dashboard, forecast, suggestions', async ({ page }) =
   await page.getByText(/Every product and warehouse the latest run looked at/).waitFor()
   await shot(page, '04-replenishment-review')
 })
+
+test('warehouse manager: anomalies (rule hits and review queue)', async ({ page }) => {
+  await loginAs(page, 'WAREHOUSE_MANAGER')
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Anomalies' }).click()
+  await page.getByRole('heading', { name: 'Anomalies' }).waitFor()
+  await page.getByRole('button', { name: 'Details' }).first().click()
+  await page.getByText('Detected by').waitFor()
+  await shot(page, '05-anomalies-rule-hits')
+
+  await page.getByRole('tab', { name: /Weekly review queue/ }).click()
+  await page.getByRole('columnheader', { name: 'Rank' }).waitFor()
+  await shot(page, '06-anomalies-review-queue')
+})

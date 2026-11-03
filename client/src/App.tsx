@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 import Dashboard from './pages/Dashboard'
 import Forecast from './pages/Forecast'
+import Anomalies from './pages/Anomalies'
 import Suggestions from './pages/Suggestions'
 
 const queryClient = new QueryClient({
@@ -29,6 +30,7 @@ export function AppRoutes() {
           <Route index element={<Dashboard />} />
           <Route path="products/:id/forecast" element={<Forecast />} />
           <Route path="suggestions" element={<Suggestions />} />
+          <Route path="anomalies" element={<Anomalies />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
