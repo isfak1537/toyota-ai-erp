@@ -311,3 +311,20 @@ export interface GoodsReceipt {
   warehouse: Warehouse
   items: { id: number; quantity: number; product: { id: number; sku: string; name: string } }[]
 }
+
+export interface Supplier {
+  id: number
+  code: string
+  name: string
+  isActive: boolean
+}
+
+export interface SupplierLink {
+  id: number
+  supplierId: number
+  productId: number
+  unitPrice: string
+  minimumOrderQty: number
+  leadTimeDays: number | null
+  isPreferred: boolean
+}
