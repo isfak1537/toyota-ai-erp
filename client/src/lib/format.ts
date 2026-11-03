@@ -20,3 +20,13 @@ export const formatMoney = (value: string | number | null | undefined) =>
   value === null || value === undefined ? '–' : Number(value).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 export const humanize = (code: string) => code.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+
+// The calendar date (YYYY-MM-DD) of an instant in business time.
+export const businessDate = (iso: string) =>
+  new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: BUSINESS_TZ }).format(new Date(iso))
+
+// [start of the day, start of the next day) in business time, as ISO instants for the API's from/to filters.
+export const businessDayRange = (from?: string, to?: string) => ({
+  from: from ? new Date(`${from}T00:00:00+06:00`).toISOString() : undefined,
+  to: to ? new Date(new Date(`${to}T00:00:00+06:00`).getTime() + 86400000).toISOString() : undefined,
+})

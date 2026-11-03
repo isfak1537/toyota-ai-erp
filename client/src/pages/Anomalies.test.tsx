@@ -71,7 +71,7 @@ describe('anomalies page (UI-005)', () => {
     expect(screen.getByText('R2 Quantity far above normal')).toBeInTheDocument()
     expect(screen.getByText(/A 10-unit issue is far larger/)).toBeInTheDocument()
     expect(screen.getByText('groq · openai/gpt-oss-120b')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Open this movement in the ledger/ })).toHaveAttribute('href', '/ledger?productId=3&warehouseId=1&focus=11')
+    expect(screen.getByRole('link', { name: /Open this movement in the ledger/ })).toHaveAttribute('href', '/ledger?productId=3&warehouseId=1&from=2026-11-01&to=2026-11-01&focus=11')
   })
 
   it('reviews a flag with a note after a confirmation step', async () => {

@@ -94,6 +94,7 @@ a.kpi:hover { text-decoration: none; border-color: var(--color-border-strong); }
   border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--color-surface);
   padding: 8px 10px; min-width: 0;
 }
+.input, .select { height: 36px; }
 .textarea { resize: vertical; min-height: 72px; }
 .input:focus-visible, .select:focus-visible, .textarea:focus-visible { outline-offset: 0; border-color: var(--color-focus); }
 .field__error { color: var(--color-danger); font-size: var(--text-sm); }

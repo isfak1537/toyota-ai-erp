@@ -6,7 +6,7 @@ import { useAnomalies } from '../api/queries'
 import type { AnomalyFlag } from '../api/types'
 import { useAuth } from '../auth/auth-context'
 import { AiNote, Badge, Banner, Button, DataState, PageHeader, Pager, TabPanel, Tabs } from '../components/ui'
-import { formatDateTime, formatNumber, humanize } from '../lib/format'
+import { businessDate, formatDateTime, formatNumber, humanize } from '../lib/format'
 import { can } from '../lib/permissions'
 import { ruleLabel } from '../lib/rules'
 
@@ -246,7 +246,7 @@ function FlagDetail({ flag }: { flag: AnomalyFlag }) {
           <dd>{formatNumber(flag.transaction.balanceAfter)}</dd>
           <dt>Ledger</dt>
           <dd>
-            <Link to={`/ledger?productId=${flag.transaction.product.id}&warehouseId=${flag.transaction.warehouse.id}&focus=${flag.transaction.id}`}>Open this movement in the ledger</Link>
+            <Link to={`/ledger?productId=${flag.transaction.product.id}&warehouseId=${flag.transaction.warehouse.id}&from=${businessDate(flag.transaction.createdAt)}&to=${businessDate(flag.transaction.createdAt)}&focus=${flag.transaction.id}`}>Open this movement in the ledger</Link>
           </dd>
           {flag.modelVersion && (
             <>

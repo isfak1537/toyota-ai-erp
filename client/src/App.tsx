@@ -8,6 +8,7 @@ import NotFound from './pages/NotFound'
 import Dashboard from './pages/Dashboard'
 import Forecast from './pages/Forecast'
 import Anomalies from './pages/Anomalies'
+import Ledger from './pages/Ledger'
 import Procurement from './pages/Procurement'
 import Suggestions from './pages/Suggestions'
 
@@ -33,6 +34,7 @@ export function AppRoutes() {
           <Route path="suggestions" element={<Suggestions />} />
           <Route path="anomalies" element={<Anomalies />} />
           <Route path="procurement" element={<Procurement />} />
+          <Route path="ledger" element={<Ledger />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>

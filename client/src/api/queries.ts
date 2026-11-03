@@ -53,7 +53,7 @@ export const useLedger = (params: Record<string, unknown>) =>
     placeholderData: keepPreviousData,
   })
 
-export const useProducts = () => useQuery({ queryKey: ['products'], queryFn: () => get<Product[]>('/products', { pageSize: 100 }) })
+export const useProducts = () => useQuery({ queryKey: ['products'], queryFn: () => get<Product[]>('/products', { limit: 100 }) })
 
 export const useWarehouses = () => useQuery({ queryKey: ['warehouses'], queryFn: () => get<Warehouse[]>('/warehouses', { pageSize: 100 }) })
 

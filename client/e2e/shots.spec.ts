@@ -50,4 +50,8 @@ test('warehouse manager: anomalies (rule hits and review queue)', async ({ page 
   await page.getByRole('button', { name: 'Receive goods…' }).first().click()
   await page.getByRole('button', { name: 'Post goods receipt' }).waitFor()
   await shot(page, '08-procurement-receive-goods')
+
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Stock ledger' }).click()
+  await page.getByRole('heading', { name: 'Stock ledger' }).waitFor()
+  await shot(page, '09-ledger')
 })
