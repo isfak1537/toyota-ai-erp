@@ -13,7 +13,9 @@
     "seed:users": "node scripts/seed-users.js",
     "seed:export-fixtures": "node scripts/export-fixtures.js",
     "test:live": "jest --selectProjects live",
-    "test:loop": "bash scripts/test-loop.sh"
+    "test:loop": "bash scripts/test-loop.sh",
+    "demo:prepare": "node scripts/demo.js prepare",
+    "demo:undo": "node scripts/demo.js undo"
   },
   "jest": {
     "projects": [
