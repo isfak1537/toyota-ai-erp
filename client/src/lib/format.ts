@@ -19,7 +19,14 @@ export const formatDays = (days: number | null | undefined, horizon = 30) =>
 export const formatMoney = (value: string | number | null | undefined) =>
   value === null || value === undefined ? '–' : Number(value).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-export const humanize = (code: string) => code.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+// "COVERED_BY_ON_ORDER" -> "Covered by on order"; acronyms keep their capitals
+export const humanize = (code: string) =>
+  code
+    .toLowerCase()
+    .replace(/_/g, ' ')
+    .replace(/^\w/, (c) => c.toUpperCase())
+    .replace(/\bllm\b/gi, 'LLM')
+    .replace(/\bpo\b/gi, 'PO')
 
 // The calendar date (YYYY-MM-DD) of an instant in business time.
 export const businessDate = (iso: string) =>

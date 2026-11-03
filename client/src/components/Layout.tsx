@@ -1,8 +1,10 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router'
 import { useAuth } from '../auth/auth-context'
 import { navFor } from '../lib/nav'
 import { roleLabel } from '../lib/permissions'
 import { AiBanner } from './AiBanner'
+import { AssistantPanel } from './AssistantPanel'
 import { Button } from './ui'
 
 export function Footer() {
@@ -22,6 +24,7 @@ export function Layout() {
   const { user, logout } = useAuth()
   const items = navFor(user?.role)
   const sections = [...new Set(items.map((item) => item.section))]
+  const [assistantOpen, setAssistantOpen] = useState(false)
 
   return (
     <div className="shell">
@@ -56,7 +59,7 @@ export function Layout() {
           </div>
         </div>
       </nav>
-      <div className="main">
+      <div className={`main${assistantOpen ? ' main--assistant-open' : ''}`}>
         <div className="main__inner">
           <div className="stack">
             <AiBanner />
@@ -65,6 +68,12 @@ export function Layout() {
         </div>
         <Footer />
       </div>
+      {!assistantOpen && (
+        <Button className="assistant-fab" variant="ai" onClick={() => setAssistantOpen(true)}>
+          ✦ Ask the assistant
+        </Button>
+      )}
+      <AssistantPanel open={assistantOpen} onClose={() => setAssistantOpen(false)} />
     </div>
   )
 }

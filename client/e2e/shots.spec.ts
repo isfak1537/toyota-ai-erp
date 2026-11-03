@@ -5,6 +5,8 @@ import { SHOTS_DIR, loginAs, settle } from './helpers'
 test.describe.configure({ mode: 'serial' })
 
 async function shot(page: Page, name: string) {
+  // the floating button would sit in the middle of a stitched full-page image
+  await page.addStyleTag({ content: name.startsWith('10-') ? '' : '.assistant-fab { display: none !important }' })
   await settle(page)
   await page.waitForTimeout(250)
   await page.mouse.move(2, 2)
@@ -54,4 +56,22 @@ test('warehouse manager: anomalies (rule hits and review queue)', async ({ page 
   await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Stock ledger' }).click()
   await page.getByRole('heading', { name: 'Stock ledger' }).waitFor()
   await shot(page, '09-ledger')
+})
+
+test('administrator: assistant, models, audit log', async ({ page }) => {
+  await loginAs(page, 'ADMIN')
+  await page.getByRole('button', { name: /Ask the assistant/ }).click()
+  await page.getByLabel('Your question').fill('Which products will run out soonest?')
+  await page.getByRole('button', { name: 'Ask' }).click()
+  await page.getByText('AI-written').waitFor({ timeout: 60000 })
+  await shot(page, '10-assistant')
+  await page.getByRole('button', { name: 'Close the assistant' }).click()
+
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'AI models' }).click()
+  await page.getByRole('heading', { name: 'AI models' }).waitFor()
+  await shot(page, '11-models')
+
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'AI audit log' }).click()
+  await page.getByRole('heading', { name: 'AI audit log' }).waitFor()
+  await shot(page, '12-audit-log')
 })

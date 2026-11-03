@@ -18,5 +18,7 @@ describe('format', () => {
 
   it('humanizes enum codes', () => {
     expect(humanize('COVERED_BY_ON_ORDER')).toBe('Covered by on order')
+    expect(humanize('LLM_CALL')).toBe('LLM call')
+    expect(humanize('LLM_SKIPPED')).toBe('LLM skipped')
   })
 })
