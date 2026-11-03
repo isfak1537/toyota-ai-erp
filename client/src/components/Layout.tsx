@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router'
+import { NavLink, Outlet, useLocation } from 'react-router'
 import { useAuth } from '../auth/auth-context'
 import { navFor } from '../lib/nav'
 import { roleLabel } from '../lib/permissions'
 import { AiBanner } from './AiBanner'
 import { AssistantPanel } from './AssistantPanel'
+import { ErrorBoundary } from './ErrorBoundary'
 import { Button } from './ui'
 
 export function Footer() {
@@ -25,9 +26,11 @@ export function Layout() {
   const items = navFor(user?.role)
   const sections = [...new Set(items.map((item) => item.section))]
   const [assistantOpen, setAssistantOpen] = useState(false)
+  const location = useLocation()
 
   return (
     <div className="shell">
+      <a href="#content" className="skip-link">Skip to the content</a>
       <nav className="nav" aria-label="Main">
         <div className="nav__brand">
           <span className="nav__logo" aria-hidden="true">AI</span>
@@ -60,12 +63,14 @@ export function Layout() {
         </div>
       </nav>
       <div className={`main${assistantOpen ? ' main--assistant-open' : ''}`}>
-        <div className="main__inner">
+        <main id="content" className="main__inner" tabIndex={-1}>
           <div className="stack">
             <AiBanner />
-            <Outlet />
+            <ErrorBoundary resetKey={location.pathname}>
+              <Outlet />
+            </ErrorBoundary>
           </div>
-        </div>
+        </main>
         <Footer />
       </div>
       {!assistantOpen && (

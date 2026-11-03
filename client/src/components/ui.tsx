@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router'
+import { useTitle } from '../lib/useTitle'
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info' | 'ai'
 
@@ -58,6 +59,8 @@ export function Card({ title, subtitle, actions, children, flush = false, ai = f
 }
 
 export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+  useTitle(title)
+
   return (
     <div className="page-header">
       <div>

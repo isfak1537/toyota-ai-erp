@@ -75,3 +75,12 @@ test('administrator: assistant, models, audit log', async ({ page }) => {
   await page.getByRole('heading', { name: 'AI audit log' }).waitFor()
   await shot(page, '12-audit-log')
 })
+
+test('phone layout', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await loginAs(page, 'PROCUREMENT_OFFICER')
+  await shot(page, '13-phone-dashboard')
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'AI suggestions' }).click()
+  await page.getByRole('heading', { name: 'AI suggestions' }).waitFor()
+  await shot(page, '14-phone-suggestions')
+})

@@ -66,3 +66,13 @@ describe('app shell', () => {
     await waitFor(() => expect(screen.queryByText(/The AI service is not responding/)).not.toBeInTheDocument())
   })
 })
+
+describe('accessibility basics', () => {
+  it('has a skip link, a main landmark and a title per page', async () => {
+    renderApp(<AppRoutes />, { role: 'ADMIN' })
+
+    expect(await screen.findByRole('link', { name: 'Skip to the content' })).toHaveAttribute('href', '#content')
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'content')
+    await waitFor(() => expect(document.title).toBe('Inventory · AI ERP (synthetic demo)'))
+  })
+})
