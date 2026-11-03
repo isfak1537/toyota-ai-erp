@@ -28,6 +28,6 @@ export const SHOTS_DIR = '../docs/screenshots'
 // Waits until nothing is loading, so a screenshot never shows a spinner.
 export async function settle(page: Page) {
   await page.waitForLoadState('networkidle')
-  await page.waitForFunction(() => !document.querySelector('.spinner') && !document.body.innerText.includes('…'))
+  await page.waitForFunction(() => !document.querySelector('.spinner') && ![...document.querySelectorAll('.kpi__value')].some((el) => el.textContent === '…'))
   await page.mouse.move(2, 2) // no stray hover tooltips in screenshots
 }

@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useAnomalies, useDaysOfCover, useInventory, useLatestRun, useSuggestions } from '../api/queries'
 import type { DaysOfCoverItem, InventoryRow, ReviewSeries } from '../api/types'
 import { Badge, Banner, Card, DataState, KpiCard, PageHeader } from '../components/ui'
+import { DECISION_LABEL, DECISION_TONE } from '../lib/decisions'
 import { formatDays, formatNumber } from '../lib/format'
 
 const keyOf = (sku: string, warehouse: string) => `${sku}|${warehouse}`
@@ -225,7 +226,7 @@ function ReorderComparison({ latest }: { latest: ReturnType<typeof useLatestRun>
                     <td className="num"><strong>{formatNumber(s.reorderPoint, 1)}</strong></td>
                     <td className="num">{diff > 0 ? '+' : ''}{formatNumber(diff, 1)}</td>
                     <td>
-                      <Badge tone={s.decision === 'ORDERED' ? 'ai' : 'neutral'}>{s.decision === 'ORDERED' ? 'Order suggested' : s.decision === 'NOT_NEEDED' ? 'No order needed' : s.decision === 'COVERED_BY_ON_ORDER' ? 'Covered by open orders' : 'Skipped'}</Badge>
+                      <Badge tone={DECISION_TONE[s.decision]}>{DECISION_LABEL[s.decision]}</Badge>
                     </td>
                   </tr>
                 )

@@ -7,6 +7,7 @@ import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 import Dashboard from './pages/Dashboard'
 import Forecast from './pages/Forecast'
+import Suggestions from './pages/Suggestions'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -27,6 +28,7 @@ export function AppRoutes() {
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="products/:id/forecast" element={<Forecast />} />
+          <Route path="suggestions" element={<Suggestions />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>

@@ -1,18 +1,31 @@
-import { test } from '@playwright/test'
+import { test, type Page } from '@playwright/test'
 import { SHOTS_DIR, loginAs, settle } from './helpers'
 
-test('dashboard (procurement officer)', async ({ page }) => {
-  await loginAs(page, 'PROCUREMENT_OFFICER')
-  await settle(page)
-  await page.screenshot({ path: `${SHOTS_DIR}/01-dashboard.png`, fullPage: true })
-})
+// One login per role (the API limits login attempts), then every page of that role in a row.
+test.describe.configure({ mode: 'serial' })
 
-test('forecast (trending product)', async ({ page }) => {
+async function shot(page: Page, name: string) {
+  await settle(page)
+  await page.waitForTimeout(250)
+  await page.mouse.move(2, 2)
+  await page.screenshot({ path: `${SHOTS_DIR}/${name}.png`, fullPage: true })
+}
+
+test('procurement officer: dashboard, forecast, suggestions', async ({ page }) => {
   await loginAs(page, 'PROCUREMENT_OFFICER')
+  await shot(page, '01-dashboard')
+
   await page.getByRole('link', { name: 'Cabin Air Filter' }).first().click()
   await page.getByRole('heading', { name: 'Cabin Air Filter' }).waitFor()
-  await settle(page)
-  await page.waitForTimeout(300)
-  await page.mouse.move(2, 2)
-  await page.screenshot({ path: `${SHOTS_DIR}/02-forecast.png`, fullPage: true })
+  await shot(page, '02-forecast')
+
+  await page.getByRole('link', { name: 'AI suggestions' }).click()
+  await page.getByRole('heading', { name: 'AI suggestions' }).waitFor()
+  await page.getByRole('button', { name: 'Review' }).first().click()
+  await page.getByText('Why this quantity').waitFor()
+  await shot(page, '03-suggestions')
+
+  await page.getByRole('tab', { name: /Replenishment review/ }).click()
+  await page.getByText(/Every product and warehouse the latest run looked at/).waitFor()
+  await shot(page, '04-replenishment-review')
 })
