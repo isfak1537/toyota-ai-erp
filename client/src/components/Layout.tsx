@@ -16,7 +16,7 @@ export function Footer() {
       </span>
       <span>Not an official Toyota product.</span>
       <span className="spacer" />
-      <span>Times are shown in Asia/Dhaka (UTC+6).</span>
+      <span>Times in Asia/Dhaka (UTC+6).</span>
     </footer>
   )
 }

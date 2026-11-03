@@ -6,12 +6,18 @@ test.describe.configure({ mode: 'serial' })
 
 async function shot(page: Page, name: string) {
   // the floating button would sit in the middle of a stitched full-page image
-  await page.addStyleTag({ content: name.startsWith('10-') ? '' : '.assistant-fab { display: none !important }' })
+  if (!name.startsWith('10-')) await page.addStyleTag({ content: '.assistant-fab { display: none !important }' })
   await settle(page)
   await page.waitForTimeout(250)
   await page.mouse.move(2, 2)
   await page.screenshot({ path: `${SHOTS_DIR}/${name}.png`, fullPage: true })
 }
+
+test('login page', async ({ page }) => {
+  await page.goto('/login')
+  await page.getByRole('heading', { name: 'Log in' }).waitFor()
+  await shot(page, '00-login')
+})
 
 test('procurement officer: dashboard, forecast, suggestions', async ({ page }) => {
   await loginAs(page, 'PROCUREMENT_OFFICER')
