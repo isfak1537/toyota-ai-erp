@@ -6,6 +6,7 @@ import { Layout } from './components/Layout'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
 import Dashboard from './pages/Dashboard'
+import Forecast from './pages/Forecast'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,6 +26,7 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="products/:id/forecast" element={<Forecast />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
