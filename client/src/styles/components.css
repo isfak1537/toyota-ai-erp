@@ -1,5 +1,9 @@
 /* ---------- app shell ---------- */
-.shell { display: grid; grid-template-columns: var(--nav-width) minmax(0, 1fr); min-height: 100vh; }
+.shell {
+  display: grid; grid-template-columns: var(--nav-width) minmax(0, 1fr); min-height: 100vh;
+  /* the dark column runs the full height of the page, not just the sticky sidebar */
+  background: linear-gradient(to right, var(--color-nav-bg) var(--nav-width), var(--color-bg) var(--nav-width));
+}
 .nav {
   background: var(--color-nav-bg); color: var(--color-nav-text); display: flex; flex-direction: column;
   position: sticky; top: 0; height: 100vh; padding: var(--space-5) var(--space-3);
@@ -19,7 +23,7 @@
 .nav__user strong { display: block; color: var(--color-nav-text-strong); font-weight: var(--weight-medium); }
 .nav__user button { margin-top: var(--space-3); }
 
-.main { min-width: 0; display: flex; flex-direction: column; min-height: 100vh; }
+.main { min-width: 0; display: flex; flex-direction: column; min-height: 100vh; background: var(--color-bg); }
 .main__inner { width: 100%; max-width: var(--content-max); margin: 0 auto; padding: var(--space-6) var(--space-8) var(--space-8); flex: 1; }
 .main--assistant-open .main__inner { padding-right: calc(var(--assistant-width) + var(--space-8)); }
 

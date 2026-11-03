@@ -5,7 +5,7 @@ import { RequireAuth } from './auth/RequireAuth'
 import { Layout } from './components/Layout'
 import Login from './pages/Login'
 import NotFound from './pages/NotFound'
-import Placeholder from './pages/Placeholder'
+import Dashboard from './pages/Dashboard'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -24,7 +24,7 @@ export function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
-          <Route index element={<Placeholder />} />
+          <Route index element={<Dashboard />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
