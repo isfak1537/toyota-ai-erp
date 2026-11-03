@@ -44,7 +44,7 @@ const anomalyFacts = (flag) => ({
   ruleCodes: flag.ruleCodes,
   detectorReason: flag.reason,
   reviewQueueRank: flag.queueRank,
-  mostUnusualAspects: (flag.topFeatures ?? []).map((f) => ({ aspect: f.feature, value: f.value, typical: f.typical })),
+  mostUnusualAspects: (flag.topFeatures ?? []).map((f) => ({ aspect: f.feature, description: f.text ?? null, value: f.value, typical: f.typical })),
 });
 
 const ask = async (kind, facts, actorUserId, background) => {

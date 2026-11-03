@@ -12,7 +12,7 @@ import type { AnomalyFlag, Role } from '../api/types'
 const all: AnomalyFlag[] = [
   flag({ id: 1, source: 'RULE', ruleCodes: ['R3'], queueRank: null, topFeatures: null, reason: 'Receipt at 23:42 local time, outside business hours (08:00-17:00)' }),
   flag({ id: 2, source: 'BOTH', ruleCodes: ['R2'], queueRank: 2 }),
-  flag({ id: 3, source: 'MODEL', ruleCodes: [], queueRank: 1, reason: 'Risk 0.994, rank 1 in the review queue', explanation: null, explanationSource: null, topFeatures: [{ feature: 'hours outside business hours', value: 5, typical: 0, contribution: 0.2 }] }),
+  flag({ id: 3, source: 'MODEL', ruleCodes: [], queueRank: 1, reason: 'Risk 0.994, rank 1 in the review queue', explanation: null, explanationSource: null, topFeatures: [{ feature: 'hours outside business hours', text: 'It happened 5.0 hours outside business hours (08:00 to 17:00); most movements happen inside them.', value: 5, typical: 0, contribution: 0.2 }] }),
 ]
 
 const serve = () =>
@@ -33,6 +33,15 @@ const render = (role: Role = 'WAREHOUSE_MANAGER', route = '/anomalies') => {
 }
 
 describe('anomalies page (UI-005)', () => {
+  it('older flags without a sentence still show the label with its numbers', async () => {
+    all.push(flag({ id: 9, source: 'MODEL', ruleCodes: [], queueRank: 3, topFeatures: [{ feature: 'movement size in units', value: 12, typical: 1, contribution: 0.1 }] }))
+    render('VIEWER', '/anomalies?tab=queue')
+
+    expect(await screen.findByText(/movement size in units:/)).toBeInTheDocument()
+    expect(screen.getByText(/\(typical 1.0\)/)).toBeInTheDocument()
+    all.pop()
+  })
+
   it('shows confirmed rule hits and the weekly review queue as two separate lists, never one', async () => {
     render()
 
@@ -49,7 +58,8 @@ describe('anomalies page (UI-005)', () => {
     await userEvent.click(screen.getByRole('tab', { name: /Weekly review queue/ }))
 
     expect(await screen.findByRole('columnheader', { name: 'Rank' })).toBeInTheDocument()
-    expect(screen.getByText(/hours outside business hours/)).toBeInTheDocument()
+    expect(screen.getByText(/It happened 5.0 hours outside business hours/)).toBeInTheDocument() // a sentence, not a label and numbers
+    expect(screen.queryByText(/\(typical/)).not.toBeInTheDocument()
     expect(screen.queryByText('R3')).not.toBeInTheDocument() // the rule-only row is not in the queue
     expect(screen.getAllByRole('row')).toHaveLength(3) // header + 2 queue rows
   })

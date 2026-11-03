@@ -341,3 +341,68 @@ def test_metrics_state_that_labels_play_no_part_in_training(tmp_path):
 
     assert "Labels are never used" in outcome.metrics["note"]
     assert not any("label" in column.lower() for column in outcome.scored.columns)
+
+
+# ---- plain-language wording of the top contributing features --------------------------------------------------
+
+from app.anomaly.model import MODEL_FEATURES, describe_feature  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "name, value, typical, expected",
+    [
+        ("log_abs_qty", 10, 1, "It moved 10 units; a typical movement is about 1."),
+        ("log_abs_qty", 1, 1, "It moved 1 unit; a typical movement is about 1."),
+        ("ratio_to_median", 10, 1, "Its size is 10.0 times the usual size for this product."),
+        ("ratio_to_median", 0.3, 1, "Its size is only 30% of the usual size for this product."),
+        ("robust_z", 9.0, 0, "Its size is unusually large for this product: 9.0 steps above normal (3 or more counts as unusual)."),
+        ("robust_z", -4.2, 0, "Its size is unusually small for this product: 4.2 steps below normal (3 or more counts as unusual)."),
+        ("robust_z", 1.8, 0, "Its size is somewhat large for this product: 1.8 steps above normal (3 or more counts as unusual)."),
+        ("robust_z", -1.3, 0, "Its size is somewhat small for this product: 1.3 steps below normal (3 or more counts as unusual)."),
+        ("robust_z", 0.4, 0, "Its size is close to the usual for this product (0.4 steps from normal)."),
+        ("share_of_stock", 0.56, 0, "It moved 56% of the stock on hand."),
+        ("share_of_stock", 0.30, 0.05, "It moved 30% of the stock on hand (typically 5%)."),
+        ("off_hours_distance", 5, 0, "It happened 5.0 hours outside business hours (08:00 to 17:00); most movements happen inside them."),
+        ("off_hours_distance", 1, 0, "It happened 1.0 hour outside business hours (08:00 to 17:00); most movements happen inside them."),
+        ("is_weekend", 1, 0, "It happened on a weekend day (Friday or Saturday); most movements do not."),
+        ("log_gap_prev_min", 3, 1069, "It came 3 minutes after the previous movement of this product here (typically 17.8 hours)."),
+        ("log_gap_prev_min", 1, 60, "It came 1 minute after the previous movement of this product here (typically 60 minutes)."),
+        ("log_gap_prev_min", 100000, 1069, "It is the first movement of this product in this warehouse."),
+        ("log_gap_prev_min", 4000, 90, "It came 2.8 days after the previous movement of this product here (typically 1.5 hours)."),
+        ("repeat_within_10min", 1, 0, "It repeats the movement just before it (same product, warehouse, type and quantity) within 10 minutes, which can be a double entry."),
+        ("manual_receipt_no_ref", 1, 0, "It is a manual receipt with no purchase order or goods receipt behind it."),
+        ("type_ADJUSTMENT", 1, 0, "It is an adjustment, an uncommon kind of movement for this product."),
+        ("type_ISSUE", 0, 1, "It is not an issue, the most common kind of movement."),
+    ],
+)
+def test_each_feature_reads_as_a_plain_sentence_that_keeps_its_numbers(name, value, typical, expected):
+    assert describe_feature(name, value, typical) == expected
+
+
+def test_every_model_feature_has_a_sentence_without_jargon_or_internal_names():
+    jargon = ("robust z", "log_", "log(", "expm1", "z-score", "ratio_to_median", "(typical 0.0)", "type_", "nan", "inf")
+
+    for name in MODEL_FEATURES:
+        for value, typical in [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (7.5, 2.0), (-2.0, 0.0)]:
+            text = describe_feature(name, value, typical)
+
+            assert text[0].isupper() and text.endswith("."), (name, text)
+            assert not any(word in text.lower() for word in jargon), (name, text)
+            assert "  " not in text and "{" not in text, (name, text)
+
+
+def test_the_outliers_top_features_carry_a_sentence_next_to_the_unchanged_numbers(trained):
+    ledger, outlier_id, model = trained
+    row = compute_features(ledger, model.stats, 6).query("id == @outlier_id")
+
+    picked = {p["feature"]: p for p in top_contributions(model, row)[0]}
+
+    assert set(picked) == {"size as a multiple of the usual", "share of the stock on hand that moved", "hours outside business hours"}
+    assert picked["size as a multiple of the usual"]["text"] == "Its size is 18.0 times the usual size for this product."
+    assert picked["hours outside business hours"]["text"] == "It happened 5.0 hours outside business hours (08:00 to 17:00); most movements happen inside them."
+    assert picked["share of the stock on hand that moved"]["text"].startswith("It moved ") and "% of the stock on hand" in picked["share of the stock on hand that moved"]["text"]
+
+    for feature in picked.values():  # the numbers themselves are unchanged
+        assert set(feature) == {"feature", "text", "value", "typical", "contribution"}
+
+    assert picked["size as a multiple of the usual"]["value"] == 18.0 and picked["size as a multiple of the usual"]["typical"] == 1.0

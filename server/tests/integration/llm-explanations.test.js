@@ -180,7 +180,7 @@ describe("anomaly explanations", () => {
 
   it("a sync explains new flags from the transaction and the detector's own reason", async () => {
     const [a] = await rows(1);
-    fakeAi.state.anomalies = { modelVersion: "anomaly-test-0001", scored: 1, flags: [flag(a.id, { source: "BOTH", queueRank: 3, topFeatures: [{ feature: "size as a multiple of the usual", value: 8, typical: 1, contribution: 0.3 }] })] };
+    fakeAi.state.anomalies = { modelVersion: "anomaly-test-0001", scored: 1, flags: [flag(a.id, { source: "BOTH", queueRank: 3, topFeatures: [{ feature: "size as a multiple of the usual", text: "Its size is 8.0 times the usual size for this product.", value: 8, typical: 1, contribution: 0.3 }] })] };
 
     const res = await sync();
 
@@ -190,7 +190,7 @@ describe("anomaly explanations", () => {
 
     const facts = JSON.parse(llm.state.requests[0].messages[1].content.split("Facts (JSON):\n")[1]);
     expect(facts).toMatchObject({ movementType: "ISSUE", units: -8, flaggedBy: "rules and the model", ruleCodes: ["R2"], reviewQueueRank: 3, detectorReason: "Issue of 8 units is 8.0x the usual 1" });
-    expect(facts.mostUnusualAspects).toEqual([{ aspect: "size as a multiple of the usual", value: 8, typical: 1 }]);
+    expect(facts.mostUnusualAspects).toEqual([{ aspect: "size as a multiple of the usual", description: "Its size is 8.0 times the usual size for this product.", value: 8, typical: 1 }]);
   });
 
   it("explains at most 10 flags per sync (highest scores first) and leaves the rest for on-demand requests", async () => {

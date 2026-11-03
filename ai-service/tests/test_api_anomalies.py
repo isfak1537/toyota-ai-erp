@@ -120,7 +120,8 @@ def test_a_queued_row_carries_its_risk_score_and_top_contributing_features(train
         assert flag["flagged"] is True and flag["source"] in ("MODEL", "BOTH") and 0.0 <= flag["riskScore"] <= 1.0
         assert 1 <= len(flag["topFeatures"]) <= 3
         for feature in flag["topFeatures"]:
-            assert set(feature) == {"feature", "value", "typical", "contribution"} and feature["contribution"] >= 0.001
+            assert set(feature) == {"feature", "text", "value", "typical", "contribution"} and feature["contribution"] >= 0.001
+            assert feature["text"][0].isupper() and feature["text"].endswith(".")
     assert all(f["topFeatures"] == [] for f in body["flags"] if f["queueRank"] is None)
 
 

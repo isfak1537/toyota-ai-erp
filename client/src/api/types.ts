@@ -183,7 +183,7 @@ export interface AnomalyFlag {
   ruleCodes: string[]
   queueRank: number | null
   period: string | null
-  topFeatures: { feature: string; value: number; typical: number; contribution: number }[] | null
+  topFeatures: { feature: string; text?: string; value: number; typical: number; contribution: number }[] | null
   modelVersion: string | null
   explanation: string | null
   explanationSource: string | null
