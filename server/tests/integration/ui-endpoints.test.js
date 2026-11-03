@@ -223,3 +223,20 @@ describe("GET /inventory/transactions date filters", () => {
     expect((await api().get(`/api/v1/inventory/transactions?${query}`)).status).toBe(400);
   });
 });
+
+describe("procurement lists carry the destination warehouse", () => {
+  it("returns it with requisitions and purchase orders (the UI shows where goods are going)", async () => {
+    const ctx = { product: await f.createProduct(), supplier: await f.createSupplier(), warehouse: await f.createWarehouse() };
+    const pr = await api().post("/api/v1/procurement/requisitions").send({ requesterName: "T", supplierId: ctx.supplier.id, destinationWarehouseId: ctx.warehouse.id, items: [{ productId: ctx.product.id, quantity: 5, estimatedUnitPrice: 2 }] }).expect(201);
+    await api().post(`/api/v1/procurement/requisitions/${pr.body.data.id}/submit`).expect(200);
+    await api().post(`/api/v1/procurement/requisitions/${pr.body.data.id}/approve`).expect(200);
+    await api().post("/api/v1/procurement/purchase-orders").send({ supplierId: ctx.supplier.id, requisitionId: pr.body.data.id, items: [{ productId: ctx.product.id, quantity: 5, unitPrice: 2 }] }).expect(201);
+
+    const requisitions = await api().get("/api/v1/procurement/requisitions");
+    const orders = await api().get("/api/v1/procurement/purchase-orders");
+
+    expect(pr.body.data.destinationWarehouse).toMatchObject({ code: ctx.warehouse.code });
+    expect(requisitions.body.data[0].destinationWarehouse).toMatchObject({ code: ctx.warehouse.code });
+    expect(orders.body.data[0].destinationWarehouse).toMatchObject({ code: ctx.warehouse.code });
+  });
+});
