@@ -12,6 +12,7 @@ export interface NavItem {
 // One list drives the sidebar and what the role may open.
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Inventory', icon: '▦', section: 'Operations' },
+  { to: '/procurement', label: 'Procurement', icon: '⇄', section: 'Operations' },
   { to: '/suggestions', label: 'AI suggestions', icon: '✦', section: 'AI' },
   { to: '/anomalies', label: 'Anomalies', icon: '◬', section: 'AI' },
 ]

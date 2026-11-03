@@ -8,6 +8,7 @@ import NotFound from './pages/NotFound'
 import Dashboard from './pages/Dashboard'
 import Forecast from './pages/Forecast'
 import Anomalies from './pages/Anomalies'
+import Procurement from './pages/Procurement'
 import Suggestions from './pages/Suggestions'
 
 const queryClient = new QueryClient({
@@ -31,6 +32,7 @@ export function AppRoutes() {
           <Route path="products/:id/forecast" element={<Forecast />} />
           <Route path="suggestions" element={<Suggestions />} />
           <Route path="anomalies" element={<Anomalies />} />
+          <Route path="procurement" element={<Procurement />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>

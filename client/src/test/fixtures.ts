@@ -1,4 +1,4 @@
-import type { AnomalyFlag, DaysOfCover, InventoryRow, LatestRun, ReviewSeries, Suggestion } from '../api/types'
+import type { AnomalyFlag, DaysOfCover, GoodsReceipt, InventoryRow, LatestRun, PurchaseOrder, Requisition, ReviewSeries, Suggestion } from '../api/types'
 
 const product = (id: number, sku: string, name: string, reorderLevel: number) => ({ id, sku, name, unit: 'pcs', price: '10.00', reorderLevel, minStock: 0, isActive: true })
 const warehouse = { id: 1, code: 'SYN-MAIN', name: 'Main warehouse' }
@@ -53,4 +53,25 @@ export const flag = (over: Partial<AnomalyFlag> = {}): AnomalyFlag => ({
   topFeatures: [{ feature: 'size as a multiple of the usual', value: 10, typical: 1, contribution: 0.3 }], modelVersion: 'anomaly-1', explanation: 'A 10-unit issue is far larger than the usual single unit.',
   explanationSource: 'LLM:groq:openai/gpt-oss-120b', status: 'OPEN', reviewedAt: null, reviewNote: null, reviewedBy: null,
   transaction: { id: 11, type: 'ISSUE', quantity: -10, balanceAfter: 40, createdAt: '2026-11-01T10:30:00Z', product: { id: 3, sku: 'SYN-ELE-001', name: 'Battery 12V 60Ah' }, warehouse: { id: 1, code: 'SYN-MAIN', name: 'Main' } }, ...over,
+})
+
+
+const wh = (id: number, code: string) => ({ id, code, name: code })
+export const warehouses = [wh(1, 'SYN-MAIN'), wh(2, 'SYN-DEPOT')]
+
+export const requisition = (over: Partial<Requisition> = {}): Requisition => ({
+  id: 4, requisitionNumber: 'PR-1001', requesterName: 'Demo Procurement Officer', supplierId: 2, supplier: { id: 2, code: 'SYN-S2', name: 'Orient Parts Co.' }, destinationWarehouseId: 1, destinationWarehouse: wh(1, 'SYN-MAIN'),
+  status: 'DRAFT', notes: null, sourceType: 'AI_SUGGESTION', sourceId: 7, createdAt: '2026-11-02T10:00:00Z',
+  items: [{ id: 1, productId: 3, quantity: 60, estimatedUnitPrice: '12.50', product: { id: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly' } }], purchaseOrders: [], ...over,
+})
+
+export const purchaseOrder = (over: Partial<PurchaseOrder> = {}): PurchaseOrder => ({
+  id: 9, poNumber: 'PO-2001', status: 'PENDING_APPROVAL', supplierId: 2, supplier: { id: 2, code: 'SYN-S2', name: 'Orient Parts Co.' }, requisitionId: 4, requisition: { id: 4, requisitionNumber: 'PR-1001' },
+  destinationWarehouseId: 1, destinationWarehouse: wh(1, 'SYN-MAIN'), subtotal: '750.00', taxAmount: '0.00', totalAmount: '750.00', createdAt: '2026-11-02T11:00:00Z', expectedDate: null,
+  items: [{ id: 31, productId: 3, quantity: 60, receivedQuantity: 20, unitPrice: '12.50', lineTotal: '750.00', product: { id: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly' } }], goodsReceipts: [], ...over,
+})
+
+export const goodsReceipt = (): GoodsReceipt => ({
+  id: 5, receiptNumber: 'GR-3001', purchaseOrderId: 9, warehouseId: 1, status: 'RECEIVED', receiptDate: '2026-11-02T12:00:00Z', createdAt: '2026-11-02T12:00:00Z',
+  purchaseOrder: { id: 9, poNumber: 'PO-2001', supplier: { id: 2, code: 'SYN-S2', name: 'Orient Parts Co.' } }, warehouse: wh(1, 'SYN-MAIN'), items: [{ id: 1, quantity: 20, product: { id: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly' } }],
 })

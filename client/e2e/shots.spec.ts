@@ -41,4 +41,13 @@ test('warehouse manager: anomalies (rule hits and review queue)', async ({ page 
   await page.getByRole('tab', { name: /Weekly review queue/ }).click()
   await page.getByRole('columnheader', { name: 'Rank' }).waitFor()
   await shot(page, '06-anomalies-review-queue')
+
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Procurement' }).click()
+  await page.getByRole('heading', { name: 'Procurement' }).waitFor()
+  await shot(page, '07-procurement-requisitions')
+
+  await page.getByRole('tab', { name: 'Purchase orders' }).click()
+  await page.getByRole('button', { name: 'Receive goods…' }).first().click()
+  await page.getByRole('button', { name: 'Post goods receipt' }).waitFor()
+  await shot(page, '08-procurement-receive-goods')
 })

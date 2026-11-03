@@ -259,3 +259,55 @@ export interface AssistantAnswer {
   toolCalls: { name: string; arguments: Record<string, unknown> }[]
   source: string | null
 }
+
+export type RequisitionStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
+export type PurchaseOrderStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'CANCELLED'
+
+export interface Requisition {
+  id: number
+  requisitionNumber: string
+  requesterName: string
+  supplierId: number | null
+  supplier: { id: number; code: string; name: string } | null
+  destinationWarehouseId: number | null
+  destinationWarehouse: Warehouse | null
+  status: RequisitionStatus
+  notes: string | null
+  sourceType: string | null
+  sourceId: number | null
+  createdAt: string
+  items: { id: number; productId: number; quantity: number; estimatedUnitPrice: string; product: { id: number; sku: string; name: string } }[]
+  purchaseOrders: { id: number; poNumber: string; status: PurchaseOrderStatus }[]
+}
+
+export interface PurchaseOrder {
+  id: number
+  poNumber: string
+  status: PurchaseOrderStatus
+  supplierId: number
+  supplier: { id: number; code: string; name: string }
+  requisitionId: number | null
+  requisition: { id: number; requisitionNumber: string } | null
+  destinationWarehouseId: number | null
+  destinationWarehouse: Warehouse | null
+  subtotal: string
+  taxAmount: string
+  totalAmount: string
+  createdAt: string
+  expectedDate: string | null
+  items: { id: number; productId: number; quantity: number; receivedQuantity: number; unitPrice: string; lineTotal: string; product: { id: number; sku: string; name: string } }[]
+  goodsReceipts: { id: number; receiptNumber: string }[]
+}
+
+export interface GoodsReceipt {
+  id: number
+  receiptNumber: string
+  purchaseOrderId: number
+  warehouseId: number
+  status: 'RECEIVED' | 'CANCELLED'
+  receiptDate: string
+  createdAt: string
+  purchaseOrder: { id: number; poNumber: string; supplier: { id: number; code: string; name: string } }
+  warehouse: Warehouse
+  items: { id: number; quantity: number; product: { id: number; sku: string; name: string } }[]
+}
