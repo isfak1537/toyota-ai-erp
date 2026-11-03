@@ -75,7 +75,7 @@ describe("the tool registry is read-only", () => {
     const dir = path.join(__dirname, "../../src/modules/ai/assistant");
     const forbidden = /\.(create|createMany|createManyAndReturn|update|updateMany|upsert|delete|deleteMany)\s*\(|\$executeRaw|\$queryRaw|\$transaction|\$executeRawUnsafe|\$queryRawUnsafe|\.query\(/;
 
-    for (const file of ["tools.js", "assistant.service.js"]) {
+    for (const file of ["tools.js", "assistant.service.js", "../cover.js"]) {
       const source = fs.readFileSync(path.join(dir, file), "utf8");
 
       expect({ file, write: forbidden.test(source.replace(/\/\/.*$/gm, "")) }).toEqual({ file, write: false });

@@ -518,14 +518,38 @@ const releaseStock = async ({
   });
 };
 
+const parseInstant = (value, name) => {
+  const date = new Date(value);
+
+  if (typeof value !== "string" || Number.isNaN(date.getTime())) {
+    throw new ValidationError(`${name} must be an ISO date or date-time`);
+  }
+
+  return date;
+};
+
 const getTransactions = async ({
   productId,
   warehouseId,
   type,
+  from,
+  to,
   skip = 0,
   take = 20,
 }) => {
   const where = {};
+
+  // `from` is inclusive and `to` exclusive, like the AI service's windows
+  if (from || to) {
+    where.createdAt = {
+      ...(from && { gte: parseInstant(from, "from") }),
+      ...(to && { lt: parseInstant(to, "to") }),
+    };
+
+    if (from && to && where.createdAt.gte >= where.createdAt.lt) {
+      throw new ValidationError("to must be after from");
+    }
+  }
 
   if (productId) {
     where.productId = Number(productId);
@@ -559,6 +583,7 @@ const getTransactions = async ({
       include: {
         product: true,
         warehouse: true,
+        createdBy: { select: { id: true, name: true, role: true } },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,

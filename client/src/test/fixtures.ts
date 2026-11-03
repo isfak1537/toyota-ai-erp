@@ -1,0 +1,77 @@
+import type { AnomalyFlag, DaysOfCover, GoodsReceipt, InventoryRow, LatestRun, PurchaseOrder, Requisition, ReviewSeries, Suggestion } from '../api/types'
+
+const product = (id: number, sku: string, name: string, reorderLevel: number) => ({ id, sku, name, unit: 'pcs', price: '10.00', reorderLevel, minStock: 0, isActive: true })
+const warehouse = { id: 1, code: 'SYN-MAIN', name: 'Main warehouse' }
+
+export const inventoryRows: InventoryRow[] = [
+  { id: 1, productId: 1, warehouseId: 1, quantity: 30, reservedQuantity: 4, product: product(1, 'SYN-BRK-006', 'Brake Caliper Rebuild Kit', 25), warehouse },
+  { id: 2, productId: 2, warehouseId: 1, quantity: 120, reservedQuantity: 0, product: product(2, 'SYN-ENG-005', 'Timing Belt Kit', 20), warehouse },
+  { id: 3, productId: 3, warehouseId: 1, quantity: 9, reservedQuantity: 0, product: product(3, 'SYN-ELE-003', 'Headlamp Assembly', 24), warehouse },
+]
+
+export const daysOfCover: DaysOfCover = {
+  forecastAvailable: true,
+  horizonDays: 30,
+  items: [
+    { sku: 'SYN-ELE-003', name: 'Headlamp Assembly', warehouse: 'SYN-MAIN', available: 9, forecastUnitsPerDay: 3, daysOfCover: 3, lastsBeyondHorizon: false, openOrderUnitsToThisWarehouse: 0, model: 'ML' },
+    { sku: 'SYN-BRK-006', name: 'Brake Caliper Rebuild Kit', warehouse: 'SYN-MAIN', available: 26, forecastUnitsPerDay: 2.6, daysOfCover: 10, lastsBeyondHorizon: false, openOrderUnitsToThisWarehouse: 0, model: 'ML' },
+    { sku: 'SYN-ENG-005', name: 'Timing Belt Kit', warehouse: 'SYN-MAIN', available: 120, forecastUnitsPerDay: 1, daysOfCover: null, lastsBeyondHorizon: true, openOrderUnitsToThisWarehouse: 0, model: 'ML' },
+  ],
+}
+
+const series = (over: Partial<ReviewSeries>): ReviewSeries => ({
+  productId: 1, warehouseId: 1, sku: 'SYN-BRK-006', name: 'Brake Caliper Rebuild Kit', warehouse: 'SYN-MAIN', staticReorderLevel: 25, available: 26, daysOfCover: 10,
+  decision: 'NOT_NEEDED', reason: 'Available 26 is above the reorder point 20.1.', reorderPoint: 20.1, safetyStock: 6.1, dailyMean: 2.6, sigma: 1.4, leadTimeDays: 7, onOrder: 0, onOrderMethod: 'NONE',
+  suggestedQty: null, suggestionId: null, ...over,
+})
+
+export const latestRun: LatestRun = {
+  runId: 'run-1',
+  ranAt: '2026-11-02T10:00:00Z',
+  modelVersion: 'forecast-20261101-abc',
+  asOf: '2026-11-01',
+  params: { z: 1.65, reviewDays: 7 },
+  counts: { evaluated: 4, suggested: 1, notNeeded: 1, coveredByOnOrder: 1, skipped: 1 },
+  series: [
+    series({}),
+    series({ productId: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly', staticReorderLevel: 24, available: 9, daysOfCover: 3, decision: 'ORDERED', reorderPoint: 40.5, suggestedQty: 60, suggestionId: 7, reason: 'Available 9 is at or below the reorder point 40.5; suggesting 60 units.' }),
+    series({ productId: 4, sku: 'SYN-ENG-001', name: 'Oil Filter', staticReorderLevel: 117, available: 111, daysOfCover: 11, decision: 'COVERED_BY_ON_ORDER', reorderPoint: 120, onOrder: 90, onOrderMethod: 'DESTINATION', reason: 'Available 111 is at or below the reorder point 120, but 90 units already on order cover the need.' }),
+    series({ productId: 5, sku: 'SYN-NEW-001', name: 'New Part', staticReorderLevel: 5, available: 3, daysOfCover: null, decision: 'SKIPPED', skipCode: 'NO_HISTORY', reason: 'No demand history for this product and warehouse, so there is no forecast.', reorderPoint: null, leadTimeDays: null, onOrder: null, onOrderMethod: null }),
+  ],
+}
+
+export const suggestion = (over: Partial<Suggestion> = {}): Suggestion => ({
+  id: 7, runId: 'run-1', productId: 3, warehouseId: 1, supplierId: 2, suggestedQty: 60, forecastDaily: 3, sigma: 1.2, leadTimeDays: 5, minimumOrderQty: 12, safetyStock: 4.4, reorderPoint: 40.5,
+  available: 9, onOrder: 0, onOrderMethod: 'NONE', zValue: 1.65, reviewDays: 7, forecastModel: 'ML', modelVersion: 'forecast-20261101-abc', explanation: 'Stock of 9 is below the reorder point of 40.5, so 60 units are suggested.',
+  explanationSource: 'LLM:groq:openai/gpt-oss-120b', status: 'PENDING', rejectReason: null, decidedAt: null, requisitionId: null, createdAt: '2026-11-02T10:00:00Z',
+  inputs: { outcome: 'SUGGEST', rawQty: 60, onOrder: { exact: 0, method: 'NONE', rounding: 'floor' } },
+  product: { id: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly', unit: 'pcs' }, warehouse: { id: 1, code: 'SYN-MAIN', name: 'Main warehouse' }, supplier: { id: 2, code: 'SYN-S2', name: 'Orient Parts Co.' }, ...over,
+})
+
+export const flag = (over: Partial<AnomalyFlag> = {}): AnomalyFlag => ({
+  id: 1, inventoryTransactionId: 11, score: 0.93, reason: 'Issue of 10 units is 10.0x the usual 1 for this product (robust z 9.0)', source: 'BOTH', ruleCodes: ['R2'], queueRank: 2, period: '2026-11-01/2026-11-07',
+  topFeatures: [{ feature: 'size as a multiple of the usual', value: 10, typical: 1, contribution: 0.3 }], modelVersion: 'anomaly-1', explanation: 'A 10-unit issue is far larger than the usual single unit.',
+  explanationSource: 'LLM:groq:openai/gpt-oss-120b', status: 'OPEN', reviewedAt: null, reviewNote: null, reviewedBy: null,
+  transaction: { id: 11, type: 'ISSUE', quantity: -10, balanceAfter: 40, createdAt: '2026-11-01T10:30:00Z', product: { id: 3, sku: 'SYN-ELE-001', name: 'Battery 12V 60Ah' }, warehouse: { id: 1, code: 'SYN-MAIN', name: 'Main' } }, ...over,
+})
+
+
+const wh = (id: number, code: string) => ({ id, code, name: code })
+export const warehouses = [wh(1, 'SYN-MAIN'), wh(2, 'SYN-DEPOT')]
+
+export const requisition = (over: Partial<Requisition> = {}): Requisition => ({
+  id: 4, requisitionNumber: 'PR-1001', requesterName: 'Demo Procurement Officer', supplierId: 2, supplier: { id: 2, code: 'SYN-S2', name: 'Orient Parts Co.' }, destinationWarehouseId: 1, destinationWarehouse: wh(1, 'SYN-MAIN'),
+  status: 'DRAFT', notes: null, sourceType: 'AI_SUGGESTION', sourceId: 7, createdAt: '2026-11-02T10:00:00Z',
+  items: [{ id: 1, productId: 3, quantity: 60, estimatedUnitPrice: '12.50', product: { id: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly' } }], purchaseOrders: [], ...over,
+})
+
+export const purchaseOrder = (over: Partial<PurchaseOrder> = {}): PurchaseOrder => ({
+  id: 9, poNumber: 'PO-2001', status: 'PENDING_APPROVAL', supplierId: 2, supplier: { id: 2, code: 'SYN-S2', name: 'Orient Parts Co.' }, requisitionId: 4, requisition: { id: 4, requisitionNumber: 'PR-1001' },
+  destinationWarehouseId: 1, destinationWarehouse: wh(1, 'SYN-MAIN'), subtotal: '750.00', taxAmount: '0.00', totalAmount: '750.00', createdAt: '2026-11-02T11:00:00Z', expectedDate: null,
+  items: [{ id: 31, productId: 3, quantity: 60, receivedQuantity: 20, unitPrice: '12.50', lineTotal: '750.00', product: { id: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly' } }], goodsReceipts: [], ...over,
+})
+
+export const goodsReceipt = (): GoodsReceipt => ({
+  id: 5, receiptNumber: 'GR-3001', purchaseOrderId: 9, warehouseId: 1, status: 'RECEIVED', receiptDate: '2026-11-02T12:00:00Z', createdAt: '2026-11-02T12:00:00Z',
+  purchaseOrder: { id: 9, poNumber: 'PO-2001', supplier: { id: 2, code: 'SYN-S2', name: 'Orient Parts Co.' } }, warehouse: wh(1, 'SYN-MAIN'), items: [{ id: 1, quantity: 20, product: { id: 3, sku: 'SYN-ELE-003', name: 'Headlamp Assembly' } }],
+})

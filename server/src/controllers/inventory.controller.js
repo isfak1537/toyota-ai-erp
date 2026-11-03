@@ -113,6 +113,8 @@ const getTransactions = async (req, res) => {
     productId: req.query.productId,
     warehouseId: req.query.warehouseId,
     type: req.query.type,
+    from: req.query.from,
+    to: req.query.to,
     ...pagination,
   });
 

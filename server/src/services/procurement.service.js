@@ -165,6 +165,7 @@ const createRequisition = async (data, actorId) => {
     },
     include: {
       supplier: true,
+      destinationWarehouse: true,
       items: {
         include: {
           product: true,
@@ -181,6 +182,7 @@ const getRequisitions = async ({ skip = 0, take = 20 } = {}) => {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
         supplier: true,
+        destinationWarehouse: true,
         items: {
           include: {
             product: true,
@@ -236,6 +238,7 @@ const submitRequisition = async (id) => {
     },
     include: {
       supplier: true,
+      destinationWarehouse: true,
       items: {
         include: {
           product: true,
@@ -285,6 +288,7 @@ const approveRequisition = async (id, actorId) => {
     },
     include: {
       supplier: true,
+      destinationWarehouse: true,
       items: {
         include: {
           product: true,
@@ -525,6 +529,7 @@ const createPurchaseOrder = async (data) => {
       },
       include: {
         supplier: true,
+        destinationWarehouse: true,
         requisition: true,
         items: {
           include: {
@@ -542,6 +547,7 @@ const getPurchaseOrders = async ({ skip = 0, take = 20 } = {}) => {
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
         supplier: true,
+        destinationWarehouse: true,
         requisition: true,
         items: {
           include: {
@@ -600,6 +606,7 @@ const approvePurchaseOrder = async (id, actorId) => {
     },
     include: {
       supplier: true,
+      destinationWarehouse: true,
       requisition: true,
       items: {
         include: {

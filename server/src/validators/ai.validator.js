@@ -71,7 +71,18 @@ const askSchema = z.strictObject({
   question: z.string().trim().min(1, "question is required").max(500, "question must be at most 500 characters"),
 });
 
+const daysOfCoverQuery = z.object({
+  warehouseCode: z.string().min(1).max(60).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(100),
+});
+
+const auditQuery = z.object({
+  eventType: z.string().min(1).max(60).optional(),
+});
+
 module.exports = {
+  daysOfCoverQuery,
+  auditQuery,
   askSchema,
   retrainSchema,
   listModelsQuery,

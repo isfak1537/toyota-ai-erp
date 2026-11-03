@@ -52,6 +52,12 @@ npm run reconcile                # inventory = last ledger balance + chain/docum
 # client
 cd client && npm install && npm run dev   # port 5173
 
+# client tests and checks
+cd client && npm test                      # vitest + testing-library + msw (no backend needed)
+cd client && npm run lint && npm run build
+cd client && npm run e2e                   # Playwright smoke + accessibility against the REAL stack (see client/e2e/README.md)
+cd client && npm run screenshots           # regenerates docs/screenshots/*.png
+
 # ai-service (P2/P3)  -- create the venv with an EXPLICIT python >= 3.11 (python.org or pyenv build, see below)
 cd ai-service && /path/to/python3.13 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 .venv/bin/uvicorn app.main:app --reload --port 8000    # needs ai-service/.env (AI_DB_URL, AI_SERVICE_SECRET)
@@ -126,7 +132,12 @@ Keep `npm test` passing.
   (AI-007, parallel double-approve test), anomaly flags with separate rule-hit and review-queue lists, model runs and retrain,
   LLM explanations (Groq primary, Gemini fallback, Ollama local; cached; `null` on any failure; 20/min and 800/day caps),
   and a read-only assistant (fixed tool registry incl. days of cover, tests prove no write tool). Background explanations use at most half of the per-minute LLM budget.
-- Next: P6 (React UI). Update this section when a phase gate passes.
+- P6 (React UI, UI-001..UI-009) is built on branch `phase-6-ui` and waits for the owner's confirmation: login, inventory
+  dashboard (KPIs, static reorder level vs AI reorder point), forecast chart, AI suggestions with the replenishment review
+  tab, anomalies (rule hits and review queue as separate tabs), procurement workflow, stock ledger, assistant panel, AI models
+  and AI audit log (ADMIN). Vitest + msw tests, Playwright smoke and axe accessibility checks against the real stack,
+  screenshots in `docs/screenshots/`.
+- Next: P7 (release prep: demo script, deployment, docs). Update this section when a phase gate passes.
 
 ### Pending verification
 

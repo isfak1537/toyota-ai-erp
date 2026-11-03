@@ -1,41 +1,64 @@
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { lazy, Suspense } from 'react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { BrowserRouter, Route, Routes } from 'react-router'
+import { AuthProvider } from './auth/AuthProvider'
+import { RequireAuth } from './auth/RequireAuth'
+import { Layout } from './components/Layout'
+import Login from './pages/Login'
+import NotFound from './pages/NotFound'
+import { Loading } from './components/ui'
 
-interface Dashboard {
-  company: string;
-  inventory: number;
-  employees: number;
-  machinesRunning: number;
-  ordersToday: number;
-}
+// the chart library is only needed on this page, so it is loaded when the page is opened
+const Forecast = lazy(() => import('./pages/Forecast'))
+import Dashboard from './pages/Dashboard'
+import Anomalies from './pages/Anomalies'
+import AuditLog from './pages/AuditLog'
+import Models from './pages/Models'
+import { RequireCapability } from './auth/RequireCapability'
+import Ledger from './pages/Ledger'
+import Procurement from './pages/Procurement'
+import Suggestions from './pages/Suggestions'
 
-function App() {
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      // a 4xx will not get better by asking again; only network trouble and server errors are retried
+      retry: (count, error) => ((error as { status?: number }).status ?? 0) >= 500 || (error as { status?: number }).status === 0 ? count < 1 : false,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
-  useEffect(() => {
-    axios
-      .get("http://localhost:5001/api/dashboard")
-      .then((response) => {
-        setDashboard(response.data);
-      })
-      .catch((error) => {
-        console.error(error);
-      });
-  }, []);
-
-  if (!dashboard) {
-    return <h1>Loading...</h1>;
-  }
-
+export function AppRoutes() {
   return (
-    <div>
-      <h1>{dashboard.company}</h1>
-      <h2>Inventory: {dashboard.inventory}</h2>
-      <h2>Employees: {dashboard.employees}</h2>
-      <h2>Machines Running: {dashboard.machinesRunning}</h2>
-      <h2>Today's Orders: {dashboard.ordersToday}</h2>
-    </div>
-  );
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route element={<RequireAuth />}>
+        <Route element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="products/:id/forecast" element={<Suspense fallback={<Loading />}><Forecast /></Suspense>} />
+          <Route path="suggestions" element={<Suggestions />} />
+          <Route path="anomalies" element={<Anomalies />} />
+          <Route path="procurement" element={<Procurement />} />
+          <Route path="ledger" element={<Ledger />} />
+          <Route path="admin/models" element={<RequireCapability capability="retrainModels"><Models /></RequireCapability>} />
+          <Route path="admin/audit" element={<RequireCapability capability="viewAuditLog"><AuditLog /></RequireCapability>} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Route>
+    </Routes>
+  )
 }
 
-export default App;
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
+  )
+}

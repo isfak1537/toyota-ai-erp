@@ -1,0 +1,82 @@
+/*
+ * Design tokens. Every colour, size and radius used by the UI comes from here, so the look can be
+ * changed in one place. Light theme only. Semantic colours always come in pairs (solid + soft) and
+ * the solid ones keep at least 4.5:1 contrast on white.
+ */
+:root {
+  /* neutrals */
+  --color-bg: #f4f6f9;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-border-strong: #cbd5e1;
+  --color-text: #0f172a;
+  --color-text-muted: #4b586b;
+  --color-text-faint: #5f6b7e;
+
+  /* sidebar */
+  --color-nav-bg: #0f1b2d;
+  --color-nav-text: #c5d0de;
+  --color-nav-text-strong: #ffffff;
+  --color-nav-active: #1d3557;
+  --color-nav-border: #22324a;
+
+  /* brand / actions */
+  --color-primary: #1f55c9;
+  --color-primary-hover: #1944a3;
+  --color-primary-soft: #e8eefb;
+  --color-focus: #6ea0ff;
+
+  /* status */
+  --color-success: #17753c;
+  --color-success-soft: #e5f5ea;
+  --color-warning: #9a5b0b;
+  --color-warning-soft: #fdf1d8;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdeceb;
+  --color-info: #0b6a8f;
+  --color-info-soft: #e0f1f8;
+
+  /* AI-generated content (suggestions, explanations, assistant) is always tinted violet */
+  --color-ai: #5b32b8;
+  --color-ai-soft: #f0ebfb;
+  --color-ai-border: #d8cdf3;
+
+  /* spacing: 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* type */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --text-xs: 0.75rem; /* 12 */
+  --text-sm: 0.8125rem; /* 13 */
+  --text-base: 0.875rem; /* 14 */
+  --text-md: 1rem; /* 16 */
+  --text-lg: 1.25rem; /* 20 */
+  --text-xl: 1.5rem; /* 24 */
+  --text-2xl: 1.875rem; /* 30 */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+
+  /* shape */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --shadow-pop: 0 10px 30px rgba(15, 23, 42, 0.18);
+
+  /* layout */
+  --nav-width: 232px;
+  --content-max: 1360px;
+  --assistant-width: 400px;
+}
