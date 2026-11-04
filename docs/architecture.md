@@ -145,6 +145,8 @@ and the UI all use the same convention.
 
 * Secrets only in environment variables; `.env` is never committed; the example files hold names only.
 * The AI service refuses to start without its shared secret, answers 401 before routing or parsing, and has no `/docs`.
+  Only `/health` is public and it shows status and model versions, not the Python or library versions; those are on
+  `GET /diagnostics`, which needs the secret.
 * The AI database role has `SELECT` on columns of three tables, is read-only at role and session level, and has a statement timeout.
 * Passwords are hashed; tokens expire; the stored role wins over the token's; login attempts are limited.
 * The LLM never sees keys, passwords or personal data; prompts contain only computed facts and product names; audit rows

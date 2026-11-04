@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -5,7 +7,26 @@ from app.config import ConfigError, Settings
 from app.main import create_app
 from app.runtime import check_python
 
+from tests.conftest import SECRET
+
 PROTECTED = ["/forecast", "/anomalies/score", "/train"]
+
+
+def test_health_does_not_reveal_the_python_version(client):
+    text = client.get("/health").text
+
+    assert "python" not in text.lower()
+    assert ".".join(str(part) for part in sys.version_info[:3]) not in text
+
+
+def test_diagnostics_need_the_secret_and_carry_the_versions(client):
+    assert client.get("/diagnostics").status_code == 401
+    assert client.get("/diagnostics", headers={"X-AI-Service-Secret": "wrong-secret-value-here"}).status_code == 401
+
+    body = client.get("/diagnostics", headers={"X-AI-Service-Secret": SECRET}).json()
+
+    assert body["runtime"]["python"] == ".".join(str(part) for part in sys.version_info[:3])
+    assert set(body) == {"service", "version", "runtime", "autotrain", "tzOffsetHours"}
 
 
 def test_health_is_open_and_reveals_no_data(client):
@@ -14,7 +35,7 @@ def test_health_is_open_and_reveals_no_data(client):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert set(body) == {"status", "service", "version", "python", "models"}
+    assert set(body) == {"status", "service", "version", "models"}
     assert body["models"] == {"forecast": None, "anomaly": None}  # nothing trained yet
 
 

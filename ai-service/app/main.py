@@ -6,7 +6,6 @@ Run:  uvicorn app.main:app --reload --port 8000
 from __future__ import annotations
 
 import logging
-import sys
 import threading
 from contextlib import asynccontextmanager
 
@@ -24,6 +23,7 @@ from app.forecasting.service import ForecastService
 from app.registry import ModelRegistry
 from app.runtime import check_python
 from app.schemas import AnomalyScoreRequest, ForecastRequest, TrainRequest
+from app.versioning import library_versions
 
 SERVICE_NAME = "toyota-erp-ai-service"
 logger = logging.getLogger("ai-service")
@@ -112,11 +112,21 @@ def create_app(
             "status": "ok",
             "service": SERVICE_NAME,
             "version": __version__,
-            "python": ".".join(str(part) for part in sys.version_info[:3]),
             "models": {"forecast": registry.active_version("forecast"), "anomaly": registry.active_version("anomaly")},
         }
 
     protected = APIRouter(dependencies=[Depends(require_secret)])
+
+    @protected.get("/diagnostics")
+    def diagnostics() -> dict:
+        # runtime and library versions: useful when a host picks a different Python, but not for the public
+        return {
+            "service": SERVICE_NAME,
+            "version": __version__,
+            "runtime": library_versions(),
+            "autotrain": settings.autotrain,
+            "tzOffsetHours": settings.tz_offset_hours,
+        }
 
     @protected.post("/forecast")
     def forecast(body: ForecastRequest) -> dict:
