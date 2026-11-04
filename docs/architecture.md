@@ -151,6 +151,8 @@ and the UI all use the same convention.
 * Passwords are hashed; tokens expire; the stored role wins over the token's; login attempts are limited.
 * The LLM never sees keys, passwords or personal data; prompts contain only computed facts and product names; audit rows
   store provider, model, purpose and outcome, never the prompt.
+* **The assistant's audit row stores the question as typed** (up to 500 characters, event `ASSISTANT_QUESTION`) so an
+  administrator can see what was asked. Never type real personal or company data into the assistant in a demo.
 * Browser: tokens live in `sessionStorage`; the client sets a content security policy; the API sets `nosniff`, no framing,
   no caching.
 

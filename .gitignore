@@ -10,3 +10,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ipynb_checkpoints/
+
+# third-party assistant skill docs (Prisma's), installed by tooling; not part of this project
+server/.agents/
+server/.claude/
+server/.windsurf/
+server/skills-lock.json

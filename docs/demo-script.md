@@ -17,7 +17,9 @@ over-stocked one.
    (*Score recent movements*), so the lists are full and the explanations are written.
 5. **Open three private windows**, one per person, logged in as: procurement officer, warehouse manager, administrator.
    The API allows 10 logins per account per 15 minutes; do not log in repeatedly.
-6. If the LLM key is not set, explanations show "Explanation unavailable". That is the designed fallback; mention it, do not hide it.
+6. Questions typed into the assistant are stored in the AI audit log (up to 500 characters). Use only the demo's own
+   products and names; never type real personal data.
+7. If the LLM key is not set, explanations show "Explanation unavailable". That is the designed fallback; mention it, do not hide it.
 
 To reset afterwards: `npm run demo:undo -- --apply`, or reload the whole synthetic dataset with
 `npm run seed:synthetic -- --apply --replace` (read its dry run first).
