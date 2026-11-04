@@ -45,6 +45,7 @@ npm run seed:synthetic           # synthetic demo data: DRY RUN by default
 npm run seed:users               # 4 demo users; passwords from DEMO_*_PASSWORD env (>= 12 chars), never printed
                                  #   -- --reset-passwords overwrites existing users' passwords
 npm run test:live                # optional: real Groq calls, only if GROQ_API_KEY is set (not part of npm test)
+npm run demo:prepare -- --apply     # stage 3-5 reorder suggestions for a demo (dry run without --apply); npm run demo:undo -- --apply puts it back
 npm run test:loop -- 20 --stop   # catch a flaky run: repeats npm test, saves failing output + context to ~/erp-flaky-logs (outside the repo)
 npm run reconcile                # inventory = last ledger balance + chain/document checks + reserved = reservedAfter
                                  #   -- --scope seed|all, --strict
@@ -137,7 +138,12 @@ Keep `npm test` passing.
   tab, anomalies (rule hits and review queue as separate tabs), procurement workflow, stock ledger, assistant panel, AI models
   and AI audit log (ADMIN). Vitest + msw tests, Playwright smoke and axe accessibility checks against the real stack,
   screenshots in `docs/screenshots/`.
-- Next: P7 (release prep: demo script, deployment, docs). Update this section when a phase gate passes.
+- P7 (release prep) is built on branch `phase-7-release` and waits for the owner's confirmation: `npm run demo:prepare` / `demo:undo`
+  (stage suggestions through the inventory service; the AI service ignores `DEMO_PREPARE*` rows), plain-sentence anomaly
+  features, a manual "New requisition" form, deployment files (Vercel x2, Render blueprint, Neon pooled/direct URLs,
+  `AI_AUTOTRAIN`), README, `docs/architecture.md`, `docs/demo-script.md`, `docs/deployment.md`, `docs/release-checklist.md`, and a
+  review pass (0 known vulnerabilities in production dependencies, CSP verified against the production build).
+- Next: the owner's UI polish list, then the release steps in `docs/release-checklist.md`. Update this section when a phase gate passes.
 
 ### Pending verification
 
