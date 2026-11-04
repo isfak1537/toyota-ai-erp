@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { post } from '../api/client'
 import type { AssistantAnswer } from '../api/types'
-import { Badge, Button } from './ui'
+import { AiChip, Button } from './ui'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -91,7 +91,7 @@ export function AssistantPanel({ open, onClose }: { open: boolean; onClose: () =
             {m.text}
             {m.role === 'assistant' && !m.unavailable && (
               <div className="bubble__meta">
-                <Badge tone="ai">AI-written</Badge>
+                <AiChip>AI-written</AiChip>
                 {m.tools && m.tools.length > 0 && <> looked at: {m.tools.map((t) => TOOL_LABEL[t] ?? t).join(', ')}</>}
                 {m.source && <> · {m.source.split(':').slice(1).join(' · ')}</>}
               </div>

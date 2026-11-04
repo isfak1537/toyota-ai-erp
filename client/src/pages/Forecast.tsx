@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useInventory, useProductForecast } from '../api/queries'
 import type { ForecastResult } from '../api/types'
-import { Badge, Banner, Card, DataState, EmptyState, PageHeader } from '../components/ui'
+import { AiChip, Banner, Card, DataState, EmptyState, PageHeader } from '../components/ui'
 import { formatDate, formatNumber } from '../lib/format'
 
 const COLORS = {
@@ -154,7 +154,7 @@ function ForecastBody({ result, modelVersion, asOf }: { result: ForecastResult; 
               <dt>ML model</dt>
               <dd>{maeMl === null ? 'n/a' : formatNumber(maeMl, 2)}</dd>
               <dt>Used here</dt>
-              <dd><Badge tone="ai">{result.selectedModel === 'ML' ? 'ML model' : 'Baseline'}</Badge></dd>
+              <dd><AiChip>{result.selectedModel === 'ML' ? 'ML model' : 'Baseline'}</AiChip></dd>
             </dl>
             <p className="muted" style={{ marginTop: 12 }}>
               {better === null

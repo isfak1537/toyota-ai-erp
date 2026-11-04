@@ -171,6 +171,7 @@ a.kpi:hover { text-decoration: none; border-color: var(--color-border-strong); }
 
 /* ---------- AI explanation block ---------- */
 .ai-note { background: var(--color-ai-soft); border: 1px solid var(--color-ai-border); border-radius: var(--radius-sm); padding: var(--space-3) var(--space-4); }
+.ai-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--color-ai-soft); border: 1px solid var(--color-ai-border); color: var(--color-ai); font-size: var(--text-xs); font-weight: var(--weight-semibold); letter-spacing: 0.02em; white-space: nowrap; }
 .ai-note__label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); font-weight: var(--weight-semibold); color: var(--color-ai); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
 .ai-note--empty { background: var(--color-surface-muted); border-color: var(--color-border); color: var(--color-text-muted); }
 .ai-note--empty .ai-note__label { color: var(--color-text-muted); }

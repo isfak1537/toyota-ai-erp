@@ -213,6 +213,16 @@ export function Pager({ page, totalPages, total, onPage }: { page: number; total
   )
 }
 
+// The mark for anything the AI wrote or derived: violet, with a spark, always with words (never colour alone).
+export function AiChip({ children = 'AI', title }: { children?: ReactNode; title?: string }) {
+  return (
+    <span className="ai-chip" title={title}>
+      <span aria-hidden="true">✦</span>
+      {children}
+    </span>
+  )
+}
+
 // What an AI output shows next to it (NFR-013): that it is AI-written, by which model.
 export function AiNote({ text, source, unavailableText = 'Explanation unavailable' }: { text: string | null; source: string | null; unavailableText?: string }) {
   if (!text) {
@@ -229,7 +239,7 @@ export function AiNote({ text, source, unavailableText = 'Explanation unavailabl
   return (
     <div className="ai-note">
       <div className="ai-note__label">
-        AI explanation
+        <AiChip>AI explanation</AiChip>
         {source && <Badge tone="ai" title={source}>{provider}{model.length ? ` · ${model.join(':')}` : ''}</Badge>}
       </div>
       {text}

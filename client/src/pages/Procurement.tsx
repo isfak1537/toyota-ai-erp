@@ -5,7 +5,7 @@ import { ApiError, post } from '../api/client'
 import { useGoodsReceipts, usePurchaseOrders, useRequisitions, useWarehouses } from '../api/queries'
 import type { PurchaseOrder, PurchaseOrderStatus, Requisition, RequisitionStatus } from '../api/types'
 import { useAuth } from '../auth/auth-context'
-import { Badge, Banner, Button, DataState, PageHeader, Pager, TabPanel, Tabs } from '../components/ui'
+import { AiChip, Badge, Banner, Button, DataState, PageHeader, Pager, TabPanel, Tabs } from '../components/ui'
 import { NewRequisition } from './NewRequisition'
 import { formatDate, formatDateTime, formatMoney, formatNumber, humanize } from '../lib/format'
 import { can } from '../lib/permissions'
@@ -137,7 +137,7 @@ function RequisitionTable({ query, rows, write, page, setPage, open, setOpen, on
                 <tr>
                   <td>
                     <strong className="mono">{r.requisitionNumber}</strong>
-                    <div className="table__sub">{r.requesterName}{r.sourceType === 'AI_SUGGESTION' && ' · '}{r.sourceType === 'AI_SUGGESTION' && <Badge tone="ai">From AI suggestion</Badge>}</div>
+                    <div className="table__sub">{r.requesterName}{r.sourceType === 'AI_SUGGESTION' && ' · '}{r.sourceType === 'AI_SUGGESTION' && <AiChip>From AI suggestion</AiChip>}</div>
                   </td>
                   <td>{r.supplier?.name ?? <span className="faint">–</span>}</td>
                   <td>{r.destinationWarehouse?.code ?? <span className="faint">not set</span>}</td>
