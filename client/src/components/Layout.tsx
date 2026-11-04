@@ -6,6 +6,7 @@ import { roleLabel } from '../lib/permissions'
 import { AiBanner } from './AiBanner'
 import { AssistantPanel } from './AssistantPanel'
 import { ErrorBoundary } from './ErrorBoundary'
+import { Logo } from './Logo'
 import { Button } from './ui'
 
 export function Footer() {
@@ -33,7 +34,7 @@ export function Layout() {
       <a href="#content" className="skip-link">Skip to the content</a>
       <nav className="nav" aria-label="Main">
         <div className="nav__brand">
-          <span className="nav__logo" aria-hidden="true">AI</span>
+          <Logo size={34} />
           <span>
             AI ERP
             <small>Inventory &amp; procurement</small>

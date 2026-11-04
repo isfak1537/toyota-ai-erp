@@ -35,6 +35,8 @@ export const PAIRS = [
   ["banner-danger-text", "danger-soft", 4.5, "error banner text"],
   ["banner-ai-text", "ai-soft", 4.5, "AI banner text"],
   ["hero-text", "hero-bg", 4.5, "login panel text"],
+  ["logo-mark", "logo-tile", 3, "logo mark on its tile (non-text, 3:1)"],
+  ["logo-spark", "logo-tile", 3, "logo spark on its tile (non-text, 3:1)"],
   ["chart-actual", "surface", 3, "chart line: actual (non-text, 3:1)"],
   ["chart-baseline", "surface", 3, "chart line: baseline (non-text, 3:1)"],
   ["chart-ml", "surface", 3, "chart line: model (non-text, 3:1)"],

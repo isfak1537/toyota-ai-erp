@@ -39,6 +39,8 @@ Measured with the WCAG 2.x formula by `client/scripts/contrast.mjs` (`cd client 
 | `banner-danger-text` #861a10 | `danger-soft` #fbe8e3 | 8.19 | 4.5 | error banner text |
 | `banner-ai-text` #43268a | `ai-soft` #f1ecf9 | 9.62 | 4.5 | AI banner text |
 | `hero-text` #d6e6dc | `hero-bg` #0e3b2c | 9.65 | 4.5 | login panel text |
+| `logo-mark` #f4efe4 | `logo-tile` #0e3b2c | 10.90 | 3 | logo mark on its tile (non-text, 3:1) |
+| `logo-spark` #b9a2f5 | `logo-tile` #0e3b2c | 5.68 | 3 | logo spark on its tile (non-text, 3:1) |
 | `chart-actual` #556259 | `surface` #fffdf8 | 6.30 | 3 | chart line: actual (non-text, 3:1) |
 | `chart-baseline` #8a5300 | `surface` #fffdf8 | 6.23 | 3 | chart line: baseline (non-text, 3:1) |
 | `chart-ml` #5b32b8 | `surface` #fffdf8 | 7.97 | 3 | chart line: model (non-text, 3:1) |

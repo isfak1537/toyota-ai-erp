@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/auth-context'
+import { Logo } from '../components/Logo'
 import { Banner, Button, Card } from '../components/ui'
 import { Footer } from '../components/Layout'
 
@@ -45,6 +46,7 @@ export default function Login() {
     <div>
       <div className="login">
         <section className="login__hero" aria-label="About this system">
+          <Logo size={48} />
           <h1>Inventory and procurement with a human in the loop</h1>
           <p>
             An AI-assisted ERP for an auto-parts business. Models forecast demand and suggest what to order; people approve every purchase. Numbers come from code, and the language model only
