@@ -1,9 +1,10 @@
 const { AppError } = require("../errors/app-error");
 
-// Small in-memory brute-force guard for /auth/login: at most `max` attempts per
-// `windowMs` for one client address and email. It resets on restart and is per
+// Small in-memory brute-force guard for /auth/login. Two budgets per window: at most `max` attempts for
+// one client address and email, and at most `maxPerAddress` for one address in total, so trying one
+// password against many accounts ("password spraying") is limited too. It resets on restart and is per
 // process, which is enough for the MVP; revisit with a shared store when scaling.
-const createLoginLimiter = ({ max = 10, windowMs = 15 * 60 * 1000, now = Date.now } = {}) => {
+const createLoginLimiter = ({ max = 10, maxPerAddress = 30, windowMs = 15 * 60 * 1000, now = Date.now } = {}) => {
   const attempts = new Map();
   let calls = 0;
 
@@ -16,21 +17,24 @@ const createLoginLimiter = ({ max = 10, windowMs = 15 * 60 * 1000, now = Date.no
 
   const middleware = (req, res, next) => {
     const key = `${req.ip}|${String(req.body?.email || "").toLowerCase()}`;
+    const addressKey = String(req.ip);
     const t = now();
 
     calls += 1;
     if (calls % 100 === 0) sweep(t);
 
     const recent = (attempts.get(key) || []).filter((at) => t - at < windowMs);
+    const fromAddress = (attempts.get(addressKey) || []).filter((at) => t - at < windowMs);
 
-    if (recent.length >= max) {
-      attempts.set(key, recent);
+    attempts.set(key, recent);
+    attempts.set(addressKey, fromAddress);
 
+    if (recent.length >= max || fromAddress.length >= maxPerAddress) {
       return next(new AppError("Too many login attempts, try again later", 429));
     }
 
     recent.push(t);
-    attempts.set(key, recent);
+    fromAddress.push(t);
 
     next();
   };

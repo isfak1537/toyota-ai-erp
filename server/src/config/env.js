@@ -56,6 +56,12 @@ const env = {
     return process.env.AI_SERVICE_SECRET || "";
   },
 
+  // The shared secret travels in a header, so it is only sent over https, or over plain http to this machine.
+  // Set AI_ALLOW_PLAIN_HTTP=true only for a private network you trust (for example a hosting provider's internal address).
+  get aiAllowPlainHttp() {
+    return (process.env.AI_ALLOW_PLAIN_HTTP || "").trim().toLowerCase() === "true";
+  },
+
   get aiTimeoutMs() {
     return Number(process.env.AI_TIMEOUT_MS) || 15000;
   },

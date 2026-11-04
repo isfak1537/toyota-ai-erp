@@ -182,3 +182,34 @@ describe("retry policy", () => {
     expect(await rejection(client({ timeoutMs: 100 }).health())).toBeInstanceOf(ServiceUnavailableError);
   });
 });
+
+describe("the shared secret is not sent in clear text across a network", () => {
+  const ok = async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) });
+  const attempt = (baseUrl, extra = {}) => {
+    const calls = [];
+    const client = createAiClient({ baseUrl, secret: SECRET, fetchImpl: async (...a) => { calls.push(a); return ok(); }, ...extra });
+
+    return { calls, result: client.health().then(() => "sent", (e) => e.message) };
+  };
+
+  it.each(["https://ai.example.com", "http://localhost:8000", "http://127.0.0.1:8000", "http://[::1]:8000", "https://ai.onrender.com/"])("sends to %s", async (url) => {
+    const { calls, result } = attempt(url);
+
+    expect(await result).toBe("sent");
+    expect(calls).toHaveLength(1);
+  });
+
+  it.each(["http://ai.example.com", "http://10.0.0.5:8000", "http://ai-service:10000", "not a url", ""])("refuses %j and sends nothing", async (url) => {
+    const { calls, result } = attempt(url);
+
+    expect(await result).toMatch(/Refusing to send the shared secret over plain http/);
+    expect(calls).toHaveLength(0);
+  });
+
+  it("can be allowed on purpose for a private network", async () => {
+    const { calls, result } = attempt("http://ai-service:10000", { allowPlainHttp: true });
+
+    expect(await result).toBe("sent");
+    expect(calls).toHaveLength(1);
+  });
+});

@@ -48,6 +48,7 @@ variable that this page does not mention.
 | `PORT` | no | Local development only (default 5001). |
 | `AI_SERVICE_URL` | yes | URL of the AI service, for example `https://toyota-erp-ai-service.onrender.com`. |
 | `AI_SERVICE_SECRET` | yes | The shared secret; **must equal** the AI service's. At least 16 characters. |
+| `AI_ALLOW_PLAIN_HTTP` | no | The API refuses to send the shared secret over plain `http` to a non-local AI service. Set `true` only for a trusted private network address. Default off. |
 | `AI_TIMEOUT_MS` | no | Timeout of an AI request, default 15000. Raise to 70000 if the AI service is on a host that sleeps (see section 3). |
 | `AI_TRAIN_TIMEOUT_MS` | no | Timeout of a training request, default 120000. |
 | `REPLEN_Z` | no | Service-level factor, default 1.65 (about 95%). |
