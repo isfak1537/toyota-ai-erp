@@ -1,4 +1,4 @@
-# Runtime dependencies, pinned (NFR-016). Python 3.12.
+# Runtime dependencies, pinned (NFR-016). Python 3.13 (3.11 or newer works).
 fastapi==0.162.0
 uvicorn==0.54.0
 pydantic==2.14.2

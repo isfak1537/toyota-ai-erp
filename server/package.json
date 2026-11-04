@@ -17,7 +17,8 @@
     "demo:prepare": "node scripts/demo.js prepare",
     "demo:undo": "node scripts/demo.js undo",
     "postinstall": "prisma generate",
-    "db:migrate:deploy": "prisma migrate deploy"
+    "db:migrate:deploy": "prisma migrate deploy",
+    "start": "node src/index.js"
   },
   "jest": {
     "projects": [

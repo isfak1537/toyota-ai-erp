@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test e2e/smoke.spec.ts e2e/a11y.spec.ts",
-    "screenshots": "playwright test e2e/shots.spec.ts"
+    "screenshots": "playwright test e2e/shots.spec.ts",
+    "e2e:csp": "playwright test e2e/csp.spec.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.105.2",

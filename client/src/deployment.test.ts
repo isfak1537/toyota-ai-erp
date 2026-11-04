@@ -20,6 +20,7 @@ describe('hosting files', () => {
     expect(csp).toContain("default-src 'self'")
     expect(csp).toContain("script-src 'self'")
     expect(csp).not.toMatch(/script-src[^;]*unsafe-(inline|eval)/)
+    expect(csp).toMatch(/style-src 'self'(;|$)/) // no inline styles allowed either (checked against the real build by e2e/csp.spec.ts)
     expect(csp).toContain("frame-ancestors 'none'")
     expect(csp).toContain("connect-src 'self' https:") // the API lives on another https origin; tighten to it after deploying
   })
