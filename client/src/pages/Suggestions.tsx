@@ -5,7 +5,7 @@ import { ApiError, post } from '../api/client'
 import { useLatestRun, useSuggestions } from '../api/queries'
 import type { Decision, ReviewSeries, Suggestion, SuggestionStatus } from '../api/types'
 import { useAuth } from '../auth/auth-context'
-import { AiNote, Badge, Banner, Button, DataState, PageHeader, Pager, TabPanel, Tabs } from '../components/ui'
+import { AiNote, Badge, Banner, Button, DataState, EmptyState, PageHeader, Pager, TabPanel, Tabs } from '../components/ui'
 import { formatDateTime, formatDays, formatNumber, humanize, onOrderMethodText } from '../lib/format'
 import { can } from '../lib/permissions'
 import { DECISION_LABEL, DECISION_TONE } from '../lib/decisions'
@@ -306,7 +306,12 @@ function ReplenishmentReview({ latest }: { latest: ReturnType<typeof useLatestRu
 
   return (
     <DataState query={latest} empty={{ when: !run, title: 'No replenishment run yet', text: 'Run replenishment to see, for every product and warehouse, whether an order is needed and why.' }}>
-      {run && (
+      {run && run.series.length === 0 ? (
+        <EmptyState title="The latest run evaluated nothing">
+          No product and warehouse had stock and a supplier to evaluate. Check the stock records, then run replenishment again.
+        </EmptyState>
+      ) : (
+        run && (
         <>
           <div className="card__body">
             <p className="muted">
@@ -366,6 +371,7 @@ function ReplenishmentReview({ latest }: { latest: ReturnType<typeof useLatestRu
             </table>
           </div>
         </>
+        )
       )}
     </DataState>
   )

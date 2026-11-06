@@ -36,6 +36,7 @@ export function NewRequisition({ onCreated, onCancel }: { onCreated: (r: Requisi
 
   // with a supplier chosen only its products are offered; without one, every active product
   const offered = (products.data?.data ?? []).filter((p) => p.isActive && (supplierId === '' || allLinks.some((l) => l.supplierId === supplierId && l.productId === p.id)))
+  const noProducts = supplierId !== '' && offered.length === 0
   const chosen = new Set(lines.map((l) => l.productId).filter((id): id is number => id !== ''))
 
   const update = (key: number, patch: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)))
@@ -116,6 +117,10 @@ export function NewRequisition({ onCreated, onCancel }: { onCreated: (r: Requisi
       </div>
       <p className="muted">Requested by <strong>{user?.name}</strong>.{supplierId !== '' && ' Only products this supplier sells are listed.'}</p>
 
+      {noProducts ? (
+        <Banner tone="info">This supplier has no products linked yet, so there is nothing to requisition from them. Choose another supplier, or “No supplier yet” to pick from every active product.</Banner>
+      ) : (
+      <>
       <table className="table table--dense">
         <thead>
           <tr>
@@ -166,6 +171,8 @@ export function NewRequisition({ onCreated, onCancel }: { onCreated: (r: Requisi
           Add a product
         </Button>
       </div>
+      </>
+      )}
 
       {create.isError && (
         <Banner tone="danger">

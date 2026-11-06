@@ -220,6 +220,13 @@ describe('replenishment review tab', () => {
     expect(await screen.findByText('No replenishment run yet')).toBeInTheDocument()
   })
 
+  it('has an empty state when the latest run evaluated nothing', async () => {
+    await openReview({ ...latestRun, series: [], counts: { suggested: 0 } })
+
+    expect(await screen.findByText('The latest run evaluated nothing')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Decision')).not.toBeInTheDocument()
+  })
+
   it('the tab count shows how many series were evaluated', async () => {
     await openReview()
 

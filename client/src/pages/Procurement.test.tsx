@@ -273,6 +273,22 @@ describe('procurement: New requisition (PRD F-03, the manual path)', () => {
     expect(form().queryByRole('option', { name: /Closed Supplier/ })).not.toBeInTheDocument() // inactive suppliers are not offered
   })
 
+  it('a supplier with no linked products shows a line instead of an empty product table', async () => {
+    await open()
+    await userEvent.selectOptions(form().getByLabelText('Supplier (optional)'), 'Gamma Filters')
+    expect(form().getByLabelText('Product for line 1')).toBeInTheDocument()
+
+    server.use(mswHttp.get('*/api/v1/supplier-products', () => envelope([links[0]])))
+    await userEvent.click(form().getByRole('button', { name: 'Cancel' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'New requisition' }))
+    await userEvent.selectOptions(form().getByLabelText('Supplier (optional)'), 'Gamma Filters')
+
+    expect(await form().findByText(/This supplier has no products linked yet/)).toBeInTheDocument()
+    expect(form().queryByLabelText('Product for line 1')).not.toBeInTheDocument()
+    expect(form().queryByRole('button', { name: 'Add a product' })).not.toBeInTheDocument()
+    expect(form().getByRole('button', { name: 'Create draft requisition' })).toBeDisabled()
+  })
+
   it('creates the draft with exactly what was entered and reports its number', async () => {
     await open()
     let body: unknown
