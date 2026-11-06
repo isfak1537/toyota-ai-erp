@@ -114,3 +114,24 @@ describe('inventory dashboard (UI-002)', () => {
     expect(await screen.findByText('No stock records yet')).toBeInTheDocument()
   })
 })
+
+describe('today summary (UI-002)', () => {
+  it('summarises the latest run and the pending and open counts in plain sentences', async () => {
+    serve()
+    renderApp(<AppRoutes />, { role: 'VIEWER' })
+
+    const card = (await screen.findByText('Today')).closest('section')!
+    expect(await within(card).findByRole('link', { name: '2 suggestions are waiting for a decision' })).toHaveAttribute('href', '/suggestions')
+    expect(within(card).getByRole('link', { name: '5 anomaly flags are not yet reviewed' })).toHaveAttribute('href', '/anomalies')
+    expect(card).toHaveTextContent(/The last run suggested \d+ orders?; \d+ already covered by open orders/)
+    expect(card).toHaveTextContent('Latest replenishment run')
+  })
+
+  it('shows an empty state when no run exists yet', async () => {
+    serve({ latest: HttpResponse.json({ success: true, data: null }) })
+    renderApp(<AppRoutes />, { role: 'VIEWER' })
+
+    const card = (await screen.findByText('Today')).closest('section')!
+    expect(within(card).getByText('Nothing to summarise yet')).toBeInTheDocument()
+  })
+})
