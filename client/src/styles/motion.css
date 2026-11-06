@@ -1,0 +1,27 @@
+/*
+ * Motion. CSS only (no animation library), short (under 250 ms except the loading pulse), and it only
+ * moves opacity and position, never layout. Everything is switched off under "reduce motion".
+ */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-ease: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+.main__inner .stack > * { animation: rise var(--motion-base) var(--motion-ease) both; }
+
+.btn, .nav__link, .tab, .kpi { transition: background-color var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast), transform var(--motion-fast); }
+a.kpi:hover { transform: translateY(-2px); box-shadow: var(--shadow-pop); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.assistant { animation: slide-in var(--motion-base) var(--motion-ease) both; }
+.table tbody tr { transition: background-color var(--motion-fast); }
+.ai-note--thinking, .skeleton { animation: pulse 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .spinner { animation: none !important; border-top-color: var(--color-primary); border-right-color: var(--color-primary); }
+}
