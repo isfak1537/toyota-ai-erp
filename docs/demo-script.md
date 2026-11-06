@@ -47,6 +47,7 @@ To reset afterwards: `npm run demo:undo -- --apply`, or reload the whole synthet
 | The assistant says it is not available | Same cause; it recovers by itself (the per-minute budget refills). |
 | Only one suggestion appears | `demo:prepare -- --apply` was not run, or the data was reloaded. Run it, then *Run replenishment* again. |
 | "Too many attempts" at login | The login limit (10 per 15 minutes per account). Use the window that is already logged in. |
+| A skipped row "Toyota Brake Pad" (BRK-PAD-001, MAIN-WH, "no demand history") | Old development data, not part of the synthetic set. It was created by hand through the product and warehouse screens on 26 and 28 Sept 2026, before the seed existed (product id 1, warehouse id 1, no ledger rows), so it has no history to forecast from. Say: "That is a test product from early development; the AI skips it on purpose rather than guess." Synthetic rows carry the `SYN-` prefix. |
 | Numbers differ from this page | The data changed (demo staging, receipts). Say the figures, not these. |
 
 ## Questions you may be asked
