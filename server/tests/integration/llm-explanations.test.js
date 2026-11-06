@@ -75,7 +75,8 @@ describe("suggestion explanations", () => {
       safetyStockUnits: 9.9,
       reorderPointUnits: 49.9,
       minimumOrderQty: 50,
-      suggestedOrderQty: 80,
+      orderQtyUnits: 80,
+      trigger: "available stock is below the AI reorder point",
       forecastModel: "machine-learning model",
     });
     expect(JSON.stringify(request)).not.toMatch(/secret\.person|passwordHash|Bearer|apiKey/i);

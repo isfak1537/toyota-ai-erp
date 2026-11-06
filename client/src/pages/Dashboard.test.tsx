@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http as mswHttp, HttpResponse } from 'msw'
 import { server } from '../test/server'
@@ -28,9 +28,10 @@ describe('inventory dashboard (UI-002)', () => {
 
     const kpis = await screen.findByLabelText('Key figures')
     await within(kpis).findByText('3.0 days')
-    expect(within(kpis).getByText('Low stock').nextSibling).toHaveTextContent('1') // 9 available <= 24
-    expect(within(kpis).getByText('Pending suggestions').nextSibling).toHaveTextContent('2')
-    expect(within(kpis).getByText('Open anomalies').nextSibling).toHaveTextContent('5')
+    // the four queries resolve independently, so wait for each figure
+    await waitFor(() => expect(within(kpis).getByText('Low stock').nextSibling).toHaveTextContent('1')) // 9 available <= 24
+    await waitFor(() => expect(within(kpis).getByText('Pending suggestions').nextSibling).toHaveTextContent('2'))
+    await waitFor(() => expect(within(kpis).getByText('Open anomalies').nextSibling).toHaveTextContent('5'))
     expect(within(kpis).getByText('SYN-ELE-003 · SYN-MAIN')).toBeInTheDocument()
   })
 

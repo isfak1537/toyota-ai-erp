@@ -104,7 +104,7 @@ export default function Dashboard() {
 
       {!latest.isPending && !latest.isError && (
         <TodaySummary
-          run={latest.data?.data}
+          run={latest.data?.data ?? undefined}
           pendingSuggestions={suggestions.data?.pagination?.total}
           openAnomalies={anomalies.data?.pagination?.total}
           lowStock={inventory.isPending ? undefined : lowCount}
