@@ -37,3 +37,14 @@ export const businessDayRange = (from?: string, to?: string) => ({
   from: from ? new Date(`${from}T00:00:00+06:00`).toISOString() : undefined,
   to: to ? new Date(new Date(`${to}T00:00:00+06:00`).getTime() + 86400000).toISOString() : undefined,
 })
+
+// How open purchase orders were matched to a warehouse (AI-004); plain words for the review screens
+export const ON_ORDER_METHOD_TEXT: Record<string, string> = {
+  NONE: 'none',
+  DESTINATION: 'matched by destination warehouse',
+  DEMAND_SHARE: "share of orders without a destination warehouse, by this warehouse's demand",
+  'DESTINATION+DEMAND_SHARE': "matched by destination warehouse, plus a share of orders without one, by this warehouse's demand",
+}
+
+export const onOrderMethodText = (method: string | null | undefined) =>
+  method ? ON_ORDER_METHOD_TEXT[method] ?? humanize(method) : ''

@@ -6,7 +6,7 @@ import { useLatestRun, useSuggestions } from '../api/queries'
 import type { Decision, ReviewSeries, Suggestion, SuggestionStatus } from '../api/types'
 import { useAuth } from '../auth/auth-context'
 import { AiNote, Badge, Banner, Button, DataState, PageHeader, Pager, TabPanel, Tabs } from '../components/ui'
-import { formatDateTime, formatDays, formatNumber, humanize } from '../lib/format'
+import { formatDateTime, formatDays, formatNumber, humanize, onOrderMethodText } from '../lib/format'
 import { can } from '../lib/permissions'
 import { DECISION_LABEL, DECISION_TONE } from '../lib/decisions'
 
@@ -202,6 +202,7 @@ function SuggestionDetail({ suggestion: s, onChanged }: { suggestion: Suggestion
   })
 
   const onOrder = s.inputs.onOrder as { exact?: number; method?: string } | undefined
+  const rawQty = typeof s.inputs.rawQty === 'number' ? s.inputs.rawQty : undefined
   const text = explain.data?.explanation ?? s.explanation
   const source = explain.data?.explanationSource ?? s.explanationSource
   const error = (approve.error ?? reject.error) as ApiError | null
@@ -219,7 +220,17 @@ function SuggestionDetail({ suggestion: s, onChanged }: { suggestion: Suggestion
           <dt>Safety stock</dt><dd>{formatNumber(s.safetyStock, 1)} (z = {s.zValue})</dd>
           <dt>Reorder point</dt><dd>{formatNumber(s.reorderPoint, 1)}</dd>
           <dt>Available now</dt><dd>{formatNumber(s.available)}</dd>
-          <dt>Already on order</dt><dd>{formatNumber(s.onOrder)} ({humanize(s.onOrderMethod)}{onOrder?.exact !== undefined && onOrder.exact !== s.onOrder ? `, exact ${formatNumber(onOrder.exact, 1)} rounded down` : ''})</dd>
+          <dt>Already on order</dt>
+          <dd>
+            {s.onOrder === 0 && s.onOrderMethod === 'NONE'
+              ? 'none'
+              : `${formatNumber(s.onOrder)} (${onOrderMethodText(s.onOrderMethod)}${onOrder?.exact !== undefined && onOrder.exact !== s.onOrder ? `, exact ${formatNumber(onOrder.exact, 1)} rounded down` : ''})`}
+          </dd>
+          <dt>Calculated need (after stock on hand and on order)</dt>
+          <dd>
+            {rawQty === undefined ? '–' : `${formatNumber(rawQty)} ${s.product.unit}`}
+            {rawQty !== undefined && s.inputs.outcome === 'SUGGEST_MOQ' && `, raised to minimum order ${s.minimumOrderQty}`}
+          </dd>
           <dt>Minimum order qty</dt><dd>{s.minimumOrderQty}</dd>
           <dt>Suggested</dt><dd><strong>{formatNumber(s.suggestedQty)} {s.product.unit}</strong> from {s.supplier.name}</dd>
           <dt>Forecast model</dt><dd>{s.forecastModel === 'ML' ? 'Machine learning' : 'Moving average'} · <span className="mono">{s.modelVersion}</span></dd>
@@ -346,7 +357,7 @@ function ReplenishmentReview({ latest }: { latest: ReturnType<typeof useLatestRu
                     <td className="num">{s.leadTimeDays === null ? '–' : s.leadTimeDays}</td>
                     <td className="num">
                       {s.onOrder === null ? '–' : formatNumber(s.onOrder)}
-                      {s.onOrderMethod && s.onOrderMethod !== 'NONE' && <div className="table__sub">{humanize(s.onOrderMethod)}</div>}
+                      {s.onOrderMethod && s.onOrderMethod !== 'NONE' && <div className="table__sub" title="How the open orders were matched to this warehouse">{onOrderMethodText(s.onOrderMethod)}</div>}
                     </td>
                     <td className="num">{s.suggestedQty === null ? '–' : <strong>{formatNumber(s.suggestedQty)}</strong>}</td>
                   </tr>
