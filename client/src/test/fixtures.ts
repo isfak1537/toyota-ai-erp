@@ -50,7 +50,7 @@ export const suggestion = (over: Partial<Suggestion> = {}): Suggestion => ({
 
 export const flag = (over: Partial<AnomalyFlag> = {}): AnomalyFlag => ({
   id: 1, inventoryTransactionId: 11, score: 0.93, reason: 'Issue of 10 units is 10.0x the usual 1 for this product (robust z 9.0)', source: 'BOTH', ruleCodes: ['R2'], queueRank: 2, period: '2026-11-01/2026-11-07',
-  topFeatures: [{ feature: 'size as a multiple of the usual', value: 10, typical: 1, contribution: 0.3 }], modelVersion: 'anomaly-1', explanation: 'A 10-unit issue is far larger than the usual single unit.',
+  topFeatures: [{ feature: 'size as a multiple of the usual', text: 'Its size is 10.0 times the usual size for this product.', value: 10, typical: 1, contribution: 0.3 }], modelVersion: 'anomaly-1', explanation: 'A 10-unit issue is far larger than the usual single unit.',
   explanationSource: 'LLM:groq:openai/gpt-oss-120b', status: 'OPEN', reviewedAt: null, reviewNote: null, reviewedBy: null,
   transaction: { id: 11, type: 'ISSUE', quantity: -10, balanceAfter: 40, createdAt: '2026-11-01T10:30:00Z', product: { id: 3, sku: 'SYN-ELE-001', name: 'Battery 12V 60Ah' }, warehouse: { id: 1, code: 'SYN-MAIN', name: 'Main' } }, ...over,
 })

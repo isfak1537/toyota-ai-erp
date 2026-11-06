@@ -5,7 +5,8 @@ import { ApiError, post } from '../api/client'
 import { useGoodsReceipts, usePurchaseOrders, useRequisitions, useWarehouses } from '../api/queries'
 import type { PurchaseOrder, PurchaseOrderStatus, Requisition, RequisitionStatus } from '../api/types'
 import { useAuth } from '../auth/auth-context'
-import { Badge, Banner, Button, DataState, PageHeader, Pager, TabPanel, Tabs } from '../components/ui'
+import { AiChip, Badge, Banner, Button, DataState, PageHeader, Pager, TabPanel, Tabs } from '../components/ui'
+import { NewRequisition } from './NewRequisition'
 import { formatDate, formatDateTime, formatMoney, formatNumber, humanize } from '../lib/format'
 import { can } from '../lib/permissions'
 
@@ -74,12 +75,49 @@ function Requisitions({ onNotice }: { onNotice: (n: React.ReactNode) => void }) 
   const { user } = useAuth()
   const [page, setPage] = useState(1)
   const [open, setOpen] = useState<number | null>(null)
+  const [creating, setCreating] = useState(false)
   const query = useRequisitions(page)
+  const queryClient = useQueryClient()
   const rows = query.data?.data ?? []
   const write = can(user?.role, 'procurementWrite')
 
   return (
-    <DataState query={query} empty={{ when: rows.length === 0, title: 'No requisitions yet', text: 'Approve an AI suggestion to create a draft requisition.', action: <Link to="/suggestions">Open AI suggestions</Link> }}>
+    <>
+      {write && !creating && (
+        <div className="filters">
+          <Button variant="primary" onClick={() => setCreating(true)}>New requisition</Button>
+          <span className="muted">Or approve an AI suggestion to create one with the numbers filled in.</span>
+        </div>
+      )}
+      {creating && (
+        <div style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-muted)' }}>
+          <NewRequisition
+            onCancel={() => setCreating(false)}
+            onCreated={(r) => {
+              setCreating(false)
+              void queryClient.invalidateQueries({ queryKey: ['requisitions'] })
+              onNotice(<span>Draft requisition <strong>{r.requisitionNumber}</strong> created. Submit it for approval from the list.</span>)
+            }}
+          />
+        </div>
+      )}
+      <RequisitionTable query={query} rows={rows} write={write} page={page} setPage={setPage} open={open} setOpen={setOpen} onNotice={onNotice} />
+    </>
+  )
+}
+
+function RequisitionTable({ query, rows, write, page, setPage, open, setOpen, onNotice }: {
+  query: ReturnType<typeof useRequisitions>
+  rows: Requisition[]
+  write: boolean
+  page: number
+  setPage: (p: number) => void
+  open: number | null
+  setOpen: (id: number | null) => void
+  onNotice: (n: React.ReactNode) => void
+}) {
+  return (
+    <DataState query={query} empty={{ when: rows.length === 0, title: 'No requisitions yet', text: 'Create one above, or approve an AI suggestion.', action: <Link to="/suggestions">Open AI suggestions</Link> }}>
       <div className="table-wrap">
         <table className="table table--dense">
           <thead>
@@ -99,7 +137,7 @@ function Requisitions({ onNotice }: { onNotice: (n: React.ReactNode) => void }) 
                 <tr>
                   <td>
                     <strong className="mono">{r.requisitionNumber}</strong>
-                    <div className="table__sub">{r.requesterName}{r.sourceType === 'AI_SUGGESTION' && ' · '}{r.sourceType === 'AI_SUGGESTION' && <Badge tone="ai">From AI suggestion</Badge>}</div>
+                    <div className="table__sub">{r.requesterName}{r.sourceType === 'AI_SUGGESTION' && ' · '}{r.sourceType === 'AI_SUGGESTION' && <AiChip>From AI suggestion</AiChip>}</div>
                   </td>
                   <td>{r.supplier?.name ?? <span className="faint">–</span>}</td>
                   <td>{r.destinationWarehouse?.code ?? <span className="faint">not set</span>}</td>

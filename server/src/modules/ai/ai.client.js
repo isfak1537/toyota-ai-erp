@@ -11,6 +11,19 @@ const detailOf = (body) => {
   return detail.slice(0, MAX_DETAIL);
 };
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
+
+// true when the URL would send the secret in clear text across a network
+const isPlainRemote = (url) => {
+  try {
+    const parsed = new URL(url);
+
+    return parsed.protocol === "http:" && !LOCAL_HOSTS.has(parsed.hostname.replace(/^\[|\]$/g, ""));
+  } catch {
+    return true; // an unparsable URL is not something to send a secret to
+  }
+};
+
 // HTTP client for the Python AI service (SRS section 3 and 9). Every failure becomes a
 // ServiceUnavailableError (503) so a feature can degrade instead of crashing (NFR-014);
 // messages never contain the shared secret or raw response bodies.
@@ -22,6 +35,7 @@ const createAiClient = ({
   secret = env.aiServiceSecret,
   timeoutMs = env.aiTimeoutMs,
   trainTimeoutMs = env.aiTrainTimeoutMs,
+  allowPlainHttp = env.aiAllowPlainHttp,
   fetchImpl = (...args) => fetch(...args),
 } = {}) => {
   const attempt = async (path, { method, body, timeout }) => {
@@ -46,6 +60,10 @@ const createAiClient = ({
   const request = async (path, { method = "POST", body, timeout = timeoutMs, retry = false } = {}) => {
     if (!secret) {
       throw new ServiceUnavailableError("AI service is not configured (AI_SERVICE_SECRET is empty)");
+    }
+
+    if (isPlainRemote(baseUrl) && !allowPlainHttp) {
+      throw new ServiceUnavailableError("Refusing to send the shared secret over plain http to a non-local AI service: use an https AI_SERVICE_URL");
     }
 
     let response;

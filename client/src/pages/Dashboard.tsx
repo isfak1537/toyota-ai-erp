@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useAnomalies, useDaysOfCover, useInventory, useLatestRun, useSuggestions } from '../api/queries'
 import type { DaysOfCoverItem, InventoryRow, ReviewSeries } from '../api/types'
+import { TodaySummary } from '../components/TodaySummary'
 import { Badge, Banner, Card, DataState, KpiCard, PageHeader } from '../components/ui'
 import { DECISION_LABEL, DECISION_TONE } from '../lib/decisions'
 import { formatDays, formatNumber } from '../lib/format'
@@ -99,6 +100,15 @@ export default function Dashboard() {
         <Banner tone="warning">
           Days of cover need the forecasting service, which is not responding. Stock quantities below are current; the days-of-cover column is empty until it is back.
         </Banner>
+      )}
+
+      {!latest.isPending && !latest.isError && (
+        <TodaySummary
+          run={latest.data?.data ?? undefined}
+          pendingSuggestions={suggestions.data?.pagination?.total}
+          openAnomalies={anomalies.data?.pagination?.total}
+          lowStock={inventory.isPending ? undefined : lowCount}
+        />
       )}
 
       <ReorderComparison latest={latest} />

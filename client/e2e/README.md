@@ -25,3 +25,12 @@ npm run screenshots  # regenerates docs/screenshots/*.png
 
 The API limits login attempts to 10 per 15 minutes per user and address. The specs log in once per role
 and page set; if you rerun them many times in a row, restart the API to clear the limit.
+
+## Content security policy check
+
+`e2e/csp.spec.ts` loads the **production build** with the policy from `vercel.json` and fails on any violation:
+
+```
+npm run build && npx vite preview --port 4173      # in one terminal
+E2E_BASE_URL=http://localhost:4173 npm run e2e:csp  # in another (the API and AI service running)
+```

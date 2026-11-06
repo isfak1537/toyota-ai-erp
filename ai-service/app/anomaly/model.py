@@ -57,6 +57,89 @@ def feature_label(name: str) -> tuple[str, str, object]:
     return (f"movement type {kind.replace('_', ' ').lower()}", name, _identity)
 
 
+def _duration(minutes: float) -> str:
+    """'4 minutes', '3.5 hours', '2.5 days'."""
+    if minutes < 90:
+        return f"{minutes:.0f} minute{'' if round(minutes) == 1 else 's'}"
+
+    if minutes < 48 * 60:
+        return f"{minutes / 60:.1f} hours"
+
+    return f"{minutes / 1440:.1f} days"
+
+
+def _article(word: str) -> str:
+    return "an" if word[:1].lower() in "aeiou" else "a"
+
+
+# One plain sentence per feature, written for a warehouse manager. The numbers are the same ones the
+# flag carries as `value` and `typical`; only the wording changes. `value` and `typical` are in the units
+# of the underlying column (see FEATURE_LABELS), never in the model's internal log scale.
+def describe_feature(name: str, value: float, typical: float) -> str:
+    if name == "log_abs_qty":
+        return f"It moved {value:g} unit{'' if value == 1 else 's'}; a typical movement is about {typical:g}."
+
+    if name == "ratio_to_median":
+        if value >= 1:
+            return f"Its size is {value:.1f} times the usual size for this product."
+
+        return f"Its size is only {value:.0%} of the usual size for this product."
+
+    if name == "robust_z":
+        if abs(value) < 1:
+            return f"Its size is close to the usual for this product ({abs(value):.1f} steps from normal)."
+
+        side, way = ("above", "large") if value > 0 else ("below", "small")
+        strength = "unusually" if abs(value) >= 3 else "somewhat"
+
+        return f"Its size is {strength} {way} for this product: {abs(value):.1f} steps {side} normal (3 or more counts as unusual)."
+
+    if name == "share_of_stock":
+        if typical >= 0.01:
+            return f"It moved {value:.0%} of the stock on hand (typically {typical:.0%})."
+
+        return f"It moved {value:.0%} of the stock on hand."
+
+    if name == "off_hours_distance":
+        if value > 0:
+            return f"It happened {value:.1f} hour{'' if value == 1 else 's'} outside business hours (08:00 to 17:00); most movements happen inside them."
+
+        return "It happened inside business hours."
+
+    if name == "is_weekend":
+        return "It happened on a weekend day (Friday or Saturday); most movements do not." if value >= 0.5 else "It happened on a working day."
+
+    if name == "log_gap_prev_min":
+        if value >= 99_999:
+            return "It is the first movement of this product in this warehouse."
+
+        return f"It came {_duration(value)} after the previous movement of this product here (typically {_duration(typical)})."
+
+    if name == "repeat_within_10min":
+        return (
+            "It repeats the movement just before it (same product, warehouse, type and quantity) within 10 minutes, which can be a double entry."
+            if value >= 0.5
+            else "It does not repeat the movement before it."
+        )
+
+    if name == "manual_receipt_no_ref":
+        return (
+            "It is a manual receipt with no purchase order or goods receipt behind it."
+            if value >= 0.5
+            else "It is not a manual receipt without a document."
+        )
+
+    kind = name.removeprefix("type_").replace("_", " ").lower()
+
+    if value >= 0.5 and typical < 0.5:
+        return f"It is {_article(kind)} {kind}, an uncommon kind of movement for this product."
+
+    if value < 0.5 and typical >= 0.5:
+        return f"It is not {_article(kind)} {kind}, the most common kind of movement."
+
+    return f"The movement type is {'' if value >= 0.5 else 'not '}{kind}."
+
+
 @dataclass
 class AnomalyModel:
     stats: ReferenceStats
@@ -161,11 +244,13 @@ def top_contributions(model: AnomalyModel, features: pd.DataFrame, k: int = TOP_
 
             label, column, to_units = feature_label(MODEL_FEATURES[j])
             row = features.iloc[i]
+            value, typical = float(row[column]), float(to_units(model.feature_medians[j]))
             picked.append(
                 {
                     "feature": label,
-                    "value": float(row[column]),
-                    "typical": float(to_units(model.feature_medians[j])),
+                    "text": describe_feature(MODEL_FEATURES[j], value, typical),
+                    "value": value,
+                    "typical": typical,
                     "contribution": float(drops[i, j]),
                 }
             )

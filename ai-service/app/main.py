@@ -5,10 +5,12 @@ Run:  uvicorn app.main:app --reload --port 8000
 
 from __future__ import annotations
 
-import sys
+import logging
 import threading
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 
 from app import __version__
@@ -21,8 +23,10 @@ from app.forecasting.service import ForecastService
 from app.registry import ModelRegistry
 from app.runtime import check_python
 from app.schemas import AnomalyScoreRequest, ForecastRequest, TrainRequest
+from app.versioning import library_versions
 
 SERVICE_NAME = "toyota-erp-ai-service"
+logger = logging.getLogger("ai-service")
 
 
 def create_app(
@@ -34,6 +38,18 @@ def create_app(
     settings = settings or Settings.from_env(load_dotenv=True)
     registry = registry or ModelRegistry(settings.model_dir)
 
+    train_lock = threading.Lock()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        # Hosts without a persistent disk (a free web service, a serverless function) lose the trained models
+        # whenever the instance restarts. With AI_AUTOTRAIN the service trains the missing ones itself on start.
+        # Training is deterministic, so every instance that does this ends up with the same versions.
+        if settings.autotrain:
+            await run_in_threadpool(train_missing)
+
+        yield
+
     # no /docs, /redoc or /openapi.json: they would publish the whole API to anyone
     app = FastAPI(
         title="Toyota AI ERP - AI service",
@@ -41,10 +57,11 @@ def create_app(
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
+        lifespan=lifespan,
     )
     app.state.settings = settings
     app.state.registry = registry
-    app.state.train_lock = threading.Lock()
+    app.state.train_lock = train_lock
 
     def ledger_source() -> LedgerSource:
         if source is not None:
@@ -60,6 +77,19 @@ def create_app(
 
     def anomalies() -> AnomalyService:
         return AnomalyService(ledger_source(), registry, settings.tz_offset_hours)
+
+    def train_missing() -> None:
+        """Trains every model kind that has no active version. Never stops the service from starting."""
+        with train_lock:
+            for kind in ("forecast", "anomaly"):
+                if registry.active_version(kind) is not None:
+                    continue
+
+                try:
+                    outcome = (forecasting() if kind == "forecast" else anomalies()).train(None)
+                    logger.info("autotrain: trained %s %s", kind, outcome.version)
+                except Exception as error:  # noqa: BLE001 - e.g. the database is not reachable yet; /train can be called later
+                    logger.warning("autotrain: could not train %s (%s)", kind, type(error).__name__)
 
     def as_http(error: ServiceError) -> HTTPException:
         return HTTPException(error.status, detail=str(error))
@@ -82,11 +112,21 @@ def create_app(
             "status": "ok",
             "service": SERVICE_NAME,
             "version": __version__,
-            "python": ".".join(str(part) for part in sys.version_info[:3]),
             "models": {"forecast": registry.active_version("forecast"), "anomaly": registry.active_version("anomaly")},
         }
 
     protected = APIRouter(dependencies=[Depends(require_secret)])
+
+    @protected.get("/diagnostics")
+    def diagnostics() -> dict:
+        # runtime and library versions: useful when a host picks a different Python, but not for the public
+        return {
+            "service": SERVICE_NAME,
+            "version": __version__,
+            "runtime": library_versions(),
+            "autotrain": settings.autotrain,
+            "tzOffsetHours": settings.tz_offset_hours,
+        }
 
     @protected.post("/forecast")
     def forecast(body: ForecastRequest) -> dict:

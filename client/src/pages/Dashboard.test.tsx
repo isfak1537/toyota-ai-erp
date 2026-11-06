@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http as mswHttp, HttpResponse } from 'msw'
 import { server } from '../test/server'
@@ -28,9 +28,10 @@ describe('inventory dashboard (UI-002)', () => {
 
     const kpis = await screen.findByLabelText('Key figures')
     await within(kpis).findByText('3.0 days')
-    expect(within(kpis).getByText('Low stock').nextSibling).toHaveTextContent('1') // 9 available <= 24
-    expect(within(kpis).getByText('Pending suggestions').nextSibling).toHaveTextContent('2')
-    expect(within(kpis).getByText('Open anomalies').nextSibling).toHaveTextContent('5')
+    // the four queries resolve independently, so wait for each figure
+    await waitFor(() => expect(within(kpis).getByText('Low stock').nextSibling).toHaveTextContent('1')) // 9 available <= 24
+    await waitFor(() => expect(within(kpis).getByText('Pending suggestions').nextSibling).toHaveTextContent('2'))
+    await waitFor(() => expect(within(kpis).getByText('Open anomalies').nextSibling).toHaveTextContent('5'))
     expect(within(kpis).getByText('SYN-ELE-003 · SYN-MAIN')).toBeInTheDocument()
   })
 
@@ -112,5 +113,26 @@ describe('inventory dashboard (UI-002)', () => {
     renderApp(<AppRoutes />, { role: 'VIEWER' })
 
     expect(await screen.findByText('No stock records yet')).toBeInTheDocument()
+  })
+})
+
+describe('today summary (UI-002)', () => {
+  it('summarises the latest run and the pending and open counts in plain sentences', async () => {
+    serve()
+    renderApp(<AppRoutes />, { role: 'VIEWER' })
+
+    const card = (await screen.findByText('Today')).closest('section')!
+    expect(await within(card).findByRole('link', { name: '2 suggestions are waiting for a decision' })).toHaveAttribute('href', '/suggestions')
+    expect(within(card).getByRole('link', { name: '5 anomaly flags are not yet reviewed' })).toHaveAttribute('href', '/anomalies')
+    expect(card).toHaveTextContent(/The last run suggested \d+ orders?; \d+ already covered by open orders/)
+    expect(card).toHaveTextContent('Latest replenishment run')
+  })
+
+  it('shows an empty state when no run exists yet', async () => {
+    serve({ latest: HttpResponse.json({ success: true, data: null }) })
+    renderApp(<AppRoutes />, { role: 'VIEWER' })
+
+    const card = (await screen.findByText('Today')).closest('section')!
+    expect(within(card).getByText('Nothing to summarise yet')).toBeInTheDocument()
   })
 })

@@ -183,7 +183,7 @@ export interface AnomalyFlag {
   ruleCodes: string[]
   queueRank: number | null
   period: string | null
-  topFeatures: { feature: string; value: number; typical: number; contribution: number }[] | null
+  topFeatures: { feature: string; text?: string; value: number; typical: number; contribution: number }[] | null
   modelVersion: string | null
   explanation: string | null
   explanationSource: string | null
@@ -310,4 +310,21 @@ export interface GoodsReceipt {
   purchaseOrder: { id: number; poNumber: string; supplier: { id: number; code: string; name: string } }
   warehouse: Warehouse
   items: { id: number; quantity: number; product: { id: number; sku: string; name: string } }[]
+}
+
+export interface Supplier {
+  id: number
+  code: string
+  name: string
+  isActive: boolean
+}
+
+export interface SupplierLink {
+  id: number
+  supplierId: number
+  productId: number
+  unitPrice: string
+  minimumOrderQty: number
+  leadTimeDays: number | null
+  isPreferred: boolean
 }

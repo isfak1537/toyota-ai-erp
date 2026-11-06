@@ -3,10 +3,15 @@ import { Link, useParams, useSearchParams } from 'react-router'
 import { CartesianGrid, ComposedChart, Legend, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useInventory, useProductForecast } from '../api/queries'
 import type { ForecastResult } from '../api/types'
-import { Badge, Banner, Card, DataState, EmptyState, PageHeader } from '../components/ui'
+import { AiChip, Banner, Card, DataState, EmptyState, PageHeader } from '../components/ui'
 import { formatDate, formatNumber } from '../lib/format'
 
-const COLORS = { actual: '#556274', baseline: '#9a5b0b', ml: '#5b32b8', grid: '#e2e8f0' }
+const COLORS = {
+  actual: 'var(--color-chart-actual)',
+  baseline: 'var(--color-chart-baseline)',
+  ml: 'var(--color-chart-ml)',
+  grid: 'var(--color-chart-grid)',
+}
 
 const shortDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 
@@ -104,11 +109,11 @@ function ForecastBody({ result, modelVersion, asOf }: { result: ForecastResult; 
               <ResponsiveContainer>
                 <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
                   <CartesianGrid stroke={COLORS.grid} vertical={false} />
-                  <XAxis dataKey="date" tickFormatter={shortDate} tick={{ fontSize: 12, fill: '#556274' }} minTickGap={28} stroke={COLORS.grid} />
-                  <YAxis tick={{ fontSize: 12, fill: '#556274' }} stroke={COLORS.grid} width={36} allowDecimals={false} />
+                  <XAxis dataKey="date" tickFormatter={shortDate} tick={{ fontSize: 12, fill: 'var(--color-chart-actual)' }} minTickGap={28} stroke={COLORS.grid} />
+                  <YAxis tick={{ fontSize: 12, fill: 'var(--color-chart-actual)' }} stroke={COLORS.grid} width={36} allowDecimals={false} />
                   <Tooltip labelFormatter={(label) => formatDate(String(label))} formatter={(value) => formatNumber(Number(value), 1)} />
                   <Legend verticalAlign="top" height={32} iconType="plainline" />
-                  {lastActual && <ReferenceLine x={lastActual} stroke="#8492a6" strokeDasharray="2 4" label={{ value: 'forecast starts', position: 'insideTopRight', fontSize: 11, fill: '#556274' }} />}
+                  {lastActual && <ReferenceLine x={lastActual} stroke="var(--color-text-faint)" strokeDasharray="2 4" label={{ value: 'forecast starts', position: 'insideTopRight', fontSize: 11, fill: 'var(--color-chart-actual)' }} />}
                   <Line name="Actual demand" dataKey="actual" stroke={COLORS.actual} strokeWidth={1.6} dot={false} isAnimationActive={false} connectNulls />
                   <Line name="Baseline (moving average)" dataKey="baseline" stroke={COLORS.baseline} strokeWidth={2} strokeDasharray="6 4" dot={false} isAnimationActive={false} />
                   <Line name="ML model" dataKey="ml" stroke={COLORS.ml} strokeWidth={2.4} dot={false} isAnimationActive={false} />
@@ -149,7 +154,7 @@ function ForecastBody({ result, modelVersion, asOf }: { result: ForecastResult; 
               <dt>ML model</dt>
               <dd>{maeMl === null ? 'n/a' : formatNumber(maeMl, 2)}</dd>
               <dt>Used here</dt>
-              <dd><Badge tone="ai">{result.selectedModel === 'ML' ? 'ML model' : 'Baseline'}</Badge></dd>
+              <dd><AiChip>{result.selectedModel === 'ML' ? 'ML model' : 'Baseline'}</AiChip></dd>
             </dl>
             <p className="muted" style={{ marginTop: 12 }}>
               {better === null

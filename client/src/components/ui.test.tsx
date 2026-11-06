@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
-import { AiNote, Badge, Button, DataState, ErrorState, KpiCard, Pager, Tabs } from './ui'
+import { AiChip, AiNote, Badge, Button, DataState, ErrorState, KpiCard, Pager, Tabs } from './ui'
 
 describe('shared components', () => {
   it('Button shows a busy state and cannot be clicked while busy', async () => {
@@ -72,5 +72,26 @@ describe('shared components', () => {
 
     expect(screen.getByRole('link', { name: /Low stock/ })).toHaveAttribute('href', '/low')
     expect(<Badge>x</Badge>).toBeTruthy()
+  })
+})
+
+describe('AiChip', () => {
+  it('says what it marks in words, with the spark hidden from screen readers', () => {
+    const { container } = render(<AiChip>AI-written</AiChip>)
+
+    expect(screen.getByText('AI-written')).toBeInTheDocument()
+    expect(container.querySelector('[aria-hidden="true"]')?.textContent).toBe('✦')
+  })
+
+  it('defaults to the word AI and labels the explanation note', () => {
+    render(
+      <>
+        <AiChip />
+        <AiNote text="Stock is low." source="LLM:groq:model-x" />
+      </>,
+    )
+
+    expect(screen.getByText('AI')).toHaveClass('ai-chip')
+    expect(screen.getByText('AI explanation')).toHaveClass('ai-chip')
   })
 })

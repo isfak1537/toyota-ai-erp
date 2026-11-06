@@ -1,7 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { get } from './client'
 import type {
-  AnomalyFlag, AuditEntry, DaysOfCover, GoodsReceipt, InventoryRow, LatestRun, LedgerRow, ModelRun, Product, ProductForecast, PurchaseOrder, Requisition, Suggestion, Warehouse,
+  AnomalyFlag, AuditEntry, DaysOfCover, GoodsReceipt, InventoryRow, LatestRun, LedgerRow, ModelRun, Product, ProductForecast, PurchaseOrder, Requisition, Suggestion, Supplier, SupplierLink, Warehouse,
 } from './types'
 
 // Read queries. Mutations live next to the page that triggers them, so each page shows its own
@@ -65,3 +65,7 @@ export const usePurchaseOrders = (page: number) =>
 
 export const useGoodsReceipts = (page: number) =>
   useQuery({ queryKey: ['goods-receipts', page], queryFn: () => get<GoodsReceipt[]>('/procurement/goods-receipts', { page, pageSize: 20 }), placeholderData: keepPreviousData })
+
+export const useSuppliers = () => useQuery({ queryKey: ['suppliers'], queryFn: () => get<Supplier[]>('/suppliers') })
+
+export const useSupplierLinks = () => useQuery({ queryKey: ['supplier-links'], queryFn: () => get<SupplierLink[]>('/supplier-products') })

@@ -1,45 +1,70 @@
 /*
  * Design tokens. Every colour, size and radius used by the UI comes from here, so the look can be
- * changed in one place. Light theme only. Semantic colours always come in pairs (solid + soft) and
- * the solid ones keep at least 4.5:1 contrast on white.
+ * changed in one place. Light theme only: bottle green (actions, navigation) on warm beige (page and cards).
+ * Semantic colours always come in pairs (solid + soft). Every text pair keeps at least 4.5:1 contrast; the numbers
+ * are in docs/design.md and `npm test` fails if a token change breaks one (src/styles/contrast.test.ts).
  */
 :root {
   /* neutrals */
-  --color-bg: #f4f6f9;
-  --color-surface: #ffffff;
-  --color-surface-muted: #f8fafc;
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --color-text: #0f172a;
-  --color-text-muted: #4b586b;
-  --color-text-faint: #5f6b7e;
+  --color-bg: #f4efe4;
+  --color-surface: #fffdf8;
+  --color-surface-muted: #faf6ec;
+  --color-border: #e2d9c6;
+  --color-border-strong: #8f8468;
+  --color-text: #1a2620;
+  --color-text-muted: #44524a;
+  --color-text-faint: #56635b;
 
   /* sidebar */
-  --color-nav-bg: #0f1b2d;
-  --color-nav-text: #c5d0de;
+  --color-nav-bg: #0e3b2c;
+  --color-nav-text: #cde0d4;
   --color-nav-text-strong: #ffffff;
-  --color-nav-active: #1d3557;
-  --color-nav-border: #22324a;
+  --color-nav-active: #17583f;
+  --color-nav-border: #1d5240;
+  --color-nav-hover: #14503a;
+  --color-nav-section: #8fb3a0;
+  --color-on-solid: #ffffff;
+  --color-ai-hover: #4a2899;
+  --color-danger-border: #e3b0a6;
+  --color-row-hover: #f8f3e8;
+  --color-neutral-soft: #ece6d6;
+  --color-neutral-text: #3f4b44;
+  --color-banner-warning-text: #6a4000;
+  --color-banner-warning-border: #e6cd94;
+  --color-banner-info-text: #0a4e69;
+  --color-banner-info-border: #aed5df;
+  --color-banner-danger-text: #861a10;
+  --color-banner-danger-border: #ecb8b0;
+  --color-banner-ai-text: #43268a;
+  --color-hero-bg: #0e3b2c;
+  --color-hero-text: #d6e6dc;
+  --color-chart-actual: #556259;
+  --color-chart-baseline: #8a5300;
+  --color-chart-ml: #5b32b8;
+  --color-chart-grid: #e2d9c6;
+  --color-logo-tile: #0e3b2c;
+  --color-logo-mark: #f4efe4;
+  --color-logo-spark: #b9a2f5;
 
   /* brand / actions */
-  --color-primary: #1f55c9;
-  --color-primary-hover: #1944a3;
-  --color-primary-soft: #e8eefb;
-  --color-focus: #6ea0ff;
+  --color-primary: #0f5a3d;
+  --color-primary-hover: #0a4630;
+  --color-primary-soft: #e1eee6;
+  --color-focus: #1b8a5f;
 
   /* status */
-  --color-success: #17753c;
-  --color-success-soft: #e5f5ea;
-  --color-warning: #9a5b0b;
-  --color-warning-soft: #fdf1d8;
+  --color-success: #1d6b36;
+  --color-success-soft: #e3f1e1;
+  --color-warning: #8a5300;
+  --color-warning-soft: #fbeccb;
   --color-danger: #b42318;
-  --color-danger-soft: #fdeceb;
+  --color-danger-soft: #fbe8e3;
   --color-info: #0b6a8f;
-  --color-info-soft: #e0f1f8;
+  --color-info-soft: #dff0f4;
 
   /* AI-generated content (suggestions, explanations, assistant) is always tinted violet */
   --color-ai: #5b32b8;
-  --color-ai-soft: #f0ebfb;
+  --color-ai-soft: #f1ecf9;
   --color-ai-border: #d8cdf3;
 
   /* spacing: 4px base */
@@ -72,8 +97,8 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-pill: 999px;
-  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-pop: 0 10px 30px rgba(15, 23, 42, 0.18);
+  --shadow-card: 0 1px 2px rgba(40, 32, 12, 0.06), 0 1px 3px rgba(40, 32, 12, 0.07);
+  --shadow-pop: 0 10px 30px rgba(20, 30, 20, 0.2);
 
   /* layout */
   --nav-width: 232px;

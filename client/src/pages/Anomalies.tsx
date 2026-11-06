@@ -187,6 +187,7 @@ function FlagList({ kind, intro }: { kind: Kind; intro: string }) {
   )
 }
 
+// Each line is a sentence the AI service wrote from the numbers; older flags without one fall back to the label and numbers.
 function TopFeatures({ flag }: { flag: AnomalyFlag }) {
   const features = flag.topFeatures ?? []
 
@@ -196,7 +197,11 @@ function TopFeatures({ flag }: { flag: AnomalyFlag }) {
     <ul style={{ margin: 0, paddingLeft: '1.1em' }}>
       {features.map((f) => (
         <li key={f.feature}>
-          {f.feature}: <strong>{formatNumber(f.value, 1)}</strong> <span className="muted">(typical {formatNumber(f.typical, 1)})</span>
+          {f.text ?? (
+            <>
+              {f.feature}: <strong>{formatNumber(f.value, 1)}</strong> <span className="muted">(typical {formatNumber(f.typical, 1)})</span>
+            </>
+          )}
         </li>
       ))}
     </ul>

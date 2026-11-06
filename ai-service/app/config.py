@@ -21,6 +21,7 @@ class Settings:
     db_url: str | None = field(default=None, repr=False)
     model_dir: Path = SERVICE_ROOT / "models"
     tz_offset_hours: int = 6
+    autotrain: bool = False  # train missing models when the service starts (hosts without a persistent disk)
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None, load_dotenv: bool = False) -> "Settings":
@@ -49,7 +50,13 @@ class Settings:
         except ValueError as error:
             raise ConfigError("AI_TZ_OFFSET_HOURS must be an integer") from error
 
+        raw = (source.get("AI_AUTOTRAIN") or "").strip().lower()
+
+        if raw not in ("", "0", "1", "true", "false", "yes", "no"):
+            raise ConfigError("AI_AUTOTRAIN must be true or false")
+
         return cls(
+            autotrain=raw in ("1", "true", "yes"),
             service_secret=secret,
             db_url=(source.get("AI_DB_URL") or "").strip() or None,
             model_dir=model_dir,

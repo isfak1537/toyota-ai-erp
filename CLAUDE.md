@@ -45,6 +45,7 @@ npm run seed:synthetic           # synthetic demo data: DRY RUN by default
 npm run seed:users               # 4 demo users; passwords from DEMO_*_PASSWORD env (>= 12 chars), never printed
                                  #   -- --reset-passwords overwrites existing users' passwords
 npm run test:live                # optional: real Groq calls, only if GROQ_API_KEY is set (not part of npm test)
+npm run demo:prepare -- --apply     # stage 3-5 reorder suggestions for a demo (dry run without --apply); npm run demo:undo -- --apply puts it back
 npm run test:loop -- 20 --stop   # catch a flaky run: repeats npm test, saves failing output + context to ~/erp-flaky-logs (outside the repo)
 npm run reconcile                # inventory = last ledger balance + chain/document checks + reserved = reservedAfter
                                  #   -- --scope seed|all, --strict
@@ -132,12 +133,17 @@ Keep `npm test` passing.
   (AI-007, parallel double-approve test), anomaly flags with separate rule-hit and review-queue lists, model runs and retrain,
   LLM explanations (Groq primary, Gemini fallback, Ollama local; cached; `null` on any failure; 20/min and 800/day caps),
   and a read-only assistant (fixed tool registry incl. days of cover, tests prove no write tool). Background explanations use at most half of the per-minute LLM budget.
-- P6 (React UI, UI-001..UI-009) is built on branch `phase-6-ui` and waits for the owner's confirmation: login, inventory
-  dashboard (KPIs, static reorder level vs AI reorder point), forecast chart, AI suggestions with the replenishment review
-  tab, anomalies (rule hits and review queue as separate tabs), procurement workflow, stock ledger, assistant panel, AI models
-  and AI audit log (ADMIN). Vitest + msw tests, Playwright smoke and axe accessibility checks against the real stack,
-  screenshots in `docs/screenshots/`.
-- Next: P7 (release prep: demo script, deployment, docs). Update this section when a phase gate passes.
+- P6 (React UI, UI-001..UI-009) passed the owner's review and is merged and tagged `i7-ui`: login, inventory dashboard (KPIs, static reorder level vs AI reorder
+  point, today's summary), forecast chart, AI suggestions with the replenishment review tab, anomalies (rule hits and review queue as separate tabs),
+  procurement workflow, stock ledger, assistant panel, AI models and AI audit log (ADMIN). Vitest + msw tests, Playwright smoke and axe checks against the
+  real stack, screenshots in `docs/screenshots/`.
+- P7 (release prep) is merged to `main` and tagged `i8-release`: `npm run demo:prepare` / `demo:undo` (stage suggestions through the inventory service; the AI
+  service ignores `DEMO_PREPARE*` rows), `npm run demo:clear-explanations` (dry run by default; clears stored explanations of PENDING suggestions only),
+  plain-sentence anomaly features, a manual "New requisition" form, bottle-green design tokens with a contrast test (`docs/design.md`), deployment files
+  (Vercel x2, Render blueprint, Neon pooled/direct URLs, `AI_AUTOTRAIN`), README, `docs/architecture.md`, `docs/demo-script.md`, `docs/deployment.md`,
+  `docs/release-checklist.md`, and a review pass (0 known vulnerabilities in production dependencies, CSP verified against the production build).
+  Final run before the merge: server 733 integration + unit tests, client 208, ai-service 388, Playwright 12, all green.
+- Next: the release steps in `docs/release-checklist.md` (deployment is not done yet; nothing has been pushed). Update this section when a phase gate passes.
 
 ### Pending verification
 

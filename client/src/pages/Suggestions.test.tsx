@@ -75,6 +75,23 @@ describe('suggestions page (UI-004)', () => {
     expect(screen.queryByRole('button', { name: 'Approve…' })).not.toBeInTheDocument()
   })
 
+  it('shows the calculated need, raised to the minimum order when that was binding, and "none" for nothing on order', async () => {
+    serve([suggestion({ suggestedQty: 80, minimumOrderQty: 80, inputs: { outcome: 'SUGGEST_MOQ', rawQty: 57, onOrder: { exact: 0, method: 'NONE', rounding: 'floor' } } })])
+    await open()
+
+    const need = screen.getByText('Calculated need (after stock on hand and on order)')
+    expect(need.nextElementSibling).toHaveTextContent('57 pcs, raised to minimum order 80')
+    expect(screen.getByText('Already on order').nextElementSibling).toHaveTextContent(/^none$/)
+  })
+
+  it('shows the calculated need without a raise when the minimum was not binding, and how open orders were matched', async () => {
+    serve([suggestion({ onOrder: 30, onOrderMethod: 'DESTINATION', inputs: { outcome: 'SUGGEST', rawQty: 60, onOrder: { exact: 30, method: 'DESTINATION', rounding: 'floor' } } })])
+    await open()
+
+    expect(screen.getByText('Calculated need (after stock on hand and on order)').nextElementSibling).toHaveTextContent(/^60 pcs$/)
+    expect(screen.getByText('Already on order').nextElementSibling).toHaveTextContent('30 (matched by destination warehouse)')
+  })
+
   it('tells the user when the suggestion had already been approved (idempotent repeat)', async () => {
     serve()
     server.use(mswHttp.post('*/api/v1/ai/suggestions/7/approve', () => envelope({ suggestion: suggestion({ status: 'APPROVED' }), requisition: { id: 4, requisitionNumber: 'PR-1001', status: 'DRAFT' }, idempotent: true })))
@@ -179,7 +196,7 @@ describe('replenishment review tab', () => {
     expect(rows[1]).toHaveTextContent('60')
 
     expect(rows[2]).toHaveTextContent('Covered by open orders')
-    expect(rows[2]).toHaveTextContent('90Destination') // onOrder with its method
+    expect(rows[2]).toHaveTextContent('90matched by destination warehouse') // onOrder with how it was matched
     expect(rows[1]).toHaveTextContent('SYN-ELE-003 · SYN-MAIN') // warehouse sits under the product
     expect(rows[3]).toHaveTextContent('Skipped')
     expect(rows[3]).toHaveTextContent(/no forecast/)
@@ -201,6 +218,13 @@ describe('replenishment review tab', () => {
     await openReview(null)
 
     expect(await screen.findByText('No replenishment run yet')).toBeInTheDocument()
+  })
+
+  it('has an empty state when the latest run evaluated nothing', async () => {
+    await openReview({ ...latestRun, series: [], counts: { suggested: 0 } })
+
+    expect(await screen.findByText('The latest run evaluated nothing')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Decision')).not.toBeInTheDocument()
   })
 
   it('the tab count shows how many series were evaluated', async () => {
