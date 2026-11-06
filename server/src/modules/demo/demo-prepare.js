@@ -186,4 +186,4 @@ const undo = async ({ apply = false, allowRemote = false, databaseUrl } = {}, de
   return { applied: apply, plans, done };
 };
 
-module.exports = { prepare, undo, planProduct, PREPARE, UNDO, DEFAULT_SKUS, DEFAULT_WAREHOUSE };
+module.exports = { prepare, undo, planProduct, hostOf, LOCAL_HOSTS, PREPARE, UNDO, DEFAULT_SKUS, DEFAULT_WAREHOUSE };

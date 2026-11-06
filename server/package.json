@@ -16,6 +16,7 @@
     "test:loop": "bash scripts/test-loop.sh",
     "demo:prepare": "node scripts/demo.js prepare",
     "demo:undo": "node scripts/demo.js undo",
+    "demo:clear-explanations": "node scripts/clear-explanations.js",
     "postinstall": "prisma generate",
     "db:migrate:deploy": "prisma migrate deploy",
     "start": "node src/index.js"

@@ -21,6 +21,13 @@ over-stocked one.
    products and names; never type real personal data.
 7. If the LLM key is not set, explanations show "Explanation unavailable". That is the designed fallback; mention it, do not hide it.
 
+**Fresh explanations (optional).** An explanation is stored on its suggestion and reused, so a pending suggestion keeps the text it
+was first given. To have them written again, clear only the pending ones: `cd server && npm run demo:clear-explanations` (a dry run
+that prints how many rows it would change), then `npm run demo:clear-explanations -- --apply` (one transaction; it writes only
+`AiSuggestion.explanation` and `explanationSource` where `status = PENDING`; decided suggestions and anomaly flags are not touched).
+The next time a suggestion is opened, or the background job runs, a new one is generated within the LLM limits. It is not part of the
+normal preparation: skip it unless the prompt changed.
+
 To reset afterwards: `npm run demo:undo -- --apply`, or reload the whole synthetic dataset with
 `npm run seed:synthetic -- --apply --replace` (read its dry run first).
 
