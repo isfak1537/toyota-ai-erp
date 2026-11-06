@@ -3,7 +3,7 @@
 require("dotenv").config({ quiet: true });
 
 const { providerFromConfig } = require("../../src/modules/ai/llm/provider");
-const { SYSTEM } = require("../../src/modules/ai/llm/explain");
+const { suggestionFacts, systemFor } = require("../../src/modules/ai/llm/explain");
 
 const key = process.env.GROQ_API_KEY;
 const model = process.env.LLM_MODEL || "openai/gpt-oss-120b";
@@ -14,21 +14,41 @@ const config = { groqApiKey: key, geminiApiKey: "", ollamaBaseUrl: "", timeoutMs
 live(`Groq live (${model})`, () => {
   const provider = key ? providerFromConfig("groq", model, config) : null;
 
-  it("writes a short explanation that quotes the supplied numbers", async () => {
-    const facts = { product: "DEMO-001 Brake Pad Set", availableUnits: 40, reorderPointUnits: 49.9, suggestedOrderQty: 80, leadTimeDays: 4 };
+  it("explains a suggestion: trigger, calculated need, binding minimum, no order-quantity vs reorder-point comparison", async () => {
+    const facts = suggestionFacts({
+      product: { sku: "DEMO-001", name: "Air Filter" },
+      warehouse: { code: "DEMO" },
+      supplier: { name: "Demo Supplier" },
+      available: 20,
+      onOrder: 0,
+      onOrderMethod: "NONE",
+      forecastDaily: 4.2,
+      sigma: 1.1,
+      leadTimeDays: 7,
+      reviewDays: 7,
+      safetyStock: 5.3,
+      reorderPoint: 34.7,
+      minimumOrderQty: 80,
+      suggestedQty: 80,
+      forecastModel: "ML",
+      inputs: { rawQty: 57, outcome: "SUGGEST_MOQ" },
+    });
 
     const out = await provider.chat({
       messages: [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: systemFor("suggestion") },
         { role: "user", content: `Explain this suggestion.\nFacts (JSON):\n${JSON.stringify(facts)}` },
       ],
       maxTokens: 700,
       temperature: 0.2,
     });
 
-    expect(out.content.length).toBeGreaterThan(20);
-    expect(out.content).toMatch(/40/);
+    expect(out.content).toMatch(/57/);
     expect(out.content).toMatch(/80/);
+    expect(out.content).toMatch(/minimum/i);
+    // the order quantity (80) and the reorder point (34.7) must not be set against each other
+    expect(out.content).not.toMatch(/80[^.]*(above|exceed|more than|greater than|higher than|larger than)[^.]*34\.7/i);
+    expect(out.content).not.toMatch(/34\.7[^.]*(below|less than|under|lower than|smaller than)[^.]*80/i);
   });
 
   it("calls a read-only tool when asked a question it can answer with one", async () => {

@@ -11,13 +11,24 @@ const SYSTEM = [
   "If something is not in the facts, do not mention it. Do not give instructions or advice beyond what the facts state.",
 ].join(" ");
 
+// A suggestion exists because available stock fell below the AI reorder point. The reorder point is a
+// stock level, the order quantity is a number of units to buy: they are different kinds of number and
+// are never compared with each other.
+const SUGGESTION_RULES = [
+  "For a suggestion, say (1) why it exists: the available stock is below the AI reorder point, (2) the calculated need in units,",
+  "and (3) whether the minimum order quantity was the binding constraint (the order is larger than the calculated need only because of it).",
+  "The reorder point is a stock level and the order quantity is an amount to buy; never compare the order quantity with the reorder point.",
+].join(" ");
+
 const num = (value, digits = 1) => (Number.isInteger(value) ? value : Number(value.toFixed(digits)));
 
 const suggestionFacts = (s) => ({
   product: `${s.product.sku} ${s.product.name}`,
   warehouse: s.warehouse.code,
   supplier: s.supplier.name,
+  trigger: "available stock is below the AI reorder point",
   availableUnits: s.available,
+  reorderPointUnits: num(s.reorderPoint),
   onOrderUnits: s.onOrder,
   onOrderMethod: s.onOrderMethod,
   forecastUnitsPerDay: num(s.forecastDaily),
@@ -25,11 +36,11 @@ const suggestionFacts = (s) => ({
   leadTimeDays: s.leadTimeDays,
   reviewDays: s.reviewDays,
   safetyStockUnits: num(s.safetyStock),
-  reorderPointUnits: num(s.reorderPoint),
+  calculatedNeedUnits: s.inputs?.rawQty,
   minimumOrderQty: s.minimumOrderQty,
-  suggestedOrderQty: s.suggestedQty,
+  minimumOrderQtyWasBindingConstraint: s.inputs?.outcome === "SUGGEST_MOQ",
+  orderQtyUnits: s.suggestedQty,
   forecastModel: s.forecastModel === "ML" ? "machine-learning model" : "moving average",
-  minimumOrderQtyApplied: s.inputs?.outcome === "SUGGEST_MOQ",
 });
 
 const anomalyFacts = (flag) => ({
@@ -47,11 +58,13 @@ const anomalyFacts = (flag) => ({
   mostUnusualAspects: (flag.topFeatures ?? []).map((f) => ({ aspect: f.feature, description: f.text ?? null, value: f.value, typical: f.typical })),
 });
 
+const systemFor = (kind) => (kind === "suggestion" ? `${SYSTEM} ${SUGGESTION_RULES}` : SYSTEM);
+
 const ask = async (kind, facts, actorUserId, background) => {
   const result = await getLlm().complete(
     {
       messages: [
-        { role: "system", content: SYSTEM },
+        { role: "system", content: systemFor(kind) },
         { role: "user", content: `Explain this ${kind}.\nFacts (JSON):\n${JSON.stringify(facts)}` },
       ],
       maxTokens: 700,
@@ -132,4 +145,4 @@ const explainMany = async (ids, explainOne, { concurrency = 1, budgetMs = 20000,
   return done;
 };
 
-module.exports = { explainSuggestion, explainAnomaly, explainMany, suggestionFacts, anomalyFacts, SYSTEM };
+module.exports = { explainSuggestion, explainAnomaly, explainMany, suggestionFacts, anomalyFacts, systemFor, SYSTEM, SUGGESTION_RULES };
