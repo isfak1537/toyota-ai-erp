@@ -142,7 +142,7 @@ Keep `npm test` passing.
   plain-sentence anomaly features, a manual "New requisition" form, bottle-green design tokens with a contrast test (`docs/design.md`), deployment files
   (Vercel x2, Render blueprint, Neon pooled/direct URLs, `AI_AUTOTRAIN`), README, `docs/architecture.md`, `docs/demo-script.md`, `docs/deployment.md`,
   `docs/release-checklist.md`, and a review pass (0 known vulnerabilities in production dependencies, CSP verified against the production build).
-  Final run before the merge: server 733 integration + unit tests, client 208, ai-service 388, Playwright 12, all green.
+  Final run before the merge: server 738 unit + integration tests, client 208, ai-service 388 (+1 slow notebook test, run with `pytest -m slow`), Playwright 12, all green.
 - Next: the release steps in `docs/release-checklist.md` (deployment is not done yet; nothing has been pushed). Update this section when a phase gate passes.
 
 ### Pending verification
