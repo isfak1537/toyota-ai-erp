@@ -43,6 +43,8 @@ live(`Groq live (${model})`, () => {
       temperature: 0.2,
     });
 
+    if (process.env.LIVE_SHOW) console.log(`EXPLANATION: ${out.content}`);
+
     expect(out.content).toMatch(/57/);
     expect(out.content).toMatch(/80/);
     expect(out.content).toMatch(/minimum/i);
