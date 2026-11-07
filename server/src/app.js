@@ -18,6 +18,7 @@ const authRoutes = require("./routes/auth.routes");
 const aiRoutes = require("./routes/ai.routes");
 const { authenticate, requireRoleForWrites } = require("./middlewares/auth.middleware");
 const roles = require("./middlewares/roles");
+const prisma = require("./config/prisma");
 
 const app = express();
 
@@ -43,6 +44,17 @@ app.use(
 );
 
 app.use(express.json());
+
+// NFR-011: liveness plus a database ping, public and free of data. 503 when the database does not answer.
+app.get("/health", async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: "ok", service: "toyota-erp-api", database: "ok" });
+  } catch {
+    res.status(503).json({ status: "degraded", service: "toyota-erp-api", database: "unavailable" });
+  }
+});
+
 app.use("/api/v1/auth", authRoutes);
 // Every business route needs a valid login (401); writes need a role from the matrix (403).
 const protect = (path, router, allowed) =>
