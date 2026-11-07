@@ -18,7 +18,7 @@ the requirement was checked; where a requirement has a part no test covers, the 
 
 | Check | Result |
 |---|---|
-| Server `npm test` (unit + integration, in band) | see the commit that merges this branch for the final count |
+| Full suites at the end of the pass | server `npm test` 745 passed (57 suites); client 208 passed, lint and build clean; ai-service 388 passed (+1 slow notebook test, passed earlier in this pass) |
 | Role matrix, nine actions, four roles and no token | all as the SRS matrix says (table below) |
 | Procure-to-stock loop through the API, then reconcile | passes; reconcile `Result: OK (0 errors, 0 warnings)` on the test database |
 | LLM key unset, and LLM rejecting every call | whole loop, explanation endpoint and assistant keep working; explanations are null / "Explanation unavailable" |
