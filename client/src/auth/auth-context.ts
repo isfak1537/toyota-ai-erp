@@ -1,10 +1,11 @@
 import { createContext, useContext } from 'react'
-import type { User } from '../api/types'
+import type { Role, User } from '../api/types'
 
 export interface AuthValue {
   user: User | null
   status: 'loading' | 'authenticated' | 'anonymous'
   login: (email: string, password: string) => Promise<void>
+  demoLogin: (role: Role) => Promise<void>
   logout: () => void
 }
 

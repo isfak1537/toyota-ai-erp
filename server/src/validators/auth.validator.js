@@ -7,4 +7,10 @@ const loginSchema = z
   })
   .strict();
 
-module.exports = { loginSchema };
+const demoLoginSchema = z
+  .object({
+    role: z.enum(["ADMIN", "WAREHOUSE_MANAGER", "PROCUREMENT_OFFICER", "VIEWER"]),
+  })
+  .strict();
+
+module.exports = { loginSchema, demoLoginSchema };

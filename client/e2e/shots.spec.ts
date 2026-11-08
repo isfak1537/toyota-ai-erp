@@ -5,8 +5,6 @@ import { SHOTS_DIR, loginAs, settle } from './helpers'
 test.describe.configure({ mode: 'serial' })
 
 async function shot(page: Page, name: string) {
-  // the floating button would sit in the middle of a stitched full-page image
-  if (!name.startsWith('10-')) await page.addStyleTag({ content: '.assistant-fab { display: none !important }' })
   await settle(page)
   await page.waitForTimeout(250)
   await page.mouse.move(2, 2)

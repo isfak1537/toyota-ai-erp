@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http as mswHttp, HttpResponse } from 'msw'
@@ -7,12 +7,16 @@ import { demoUser, renderApp } from '../test/render'
 import { AppRoutes } from '../App'
 import { tokenStore } from '../api/client'
 
+const demoStatus = (enabled: boolean) => server.use(mswHttp.get('*/api/v1/auth/demo-status', () => HttpResponse.json({ success: true, data: { enabled } })))
+
 describe('login page (UI-001)', () => {
-  it('lists the demo account emails and never a password', () => {
+  beforeEach(() => demoStatus(true))
+
+  it('shows four demo buttons and never a password', async () => {
     renderApp(<AppRoutes />, { route: '/login' })
 
-    for (const email of ['admin@demo.synthetic', 'procurement@demo.synthetic', 'warehouse@demo.synthetic', 'viewer@demo.synthetic']) {
-      expect(screen.getByText(new RegExp(email))).toBeInTheDocument()
+    for (const name of ['Admin', 'Warehouse manager', 'Procurement officer', 'Viewer']) {
+      expect(await screen.findByRole('button', { name: new RegExp(name) })).toBeInTheDocument()
     }
 
     expect(document.body.textContent).not.toMatch(/password\s*[:=]/i)
@@ -20,13 +24,63 @@ describe('login page (UI-001)', () => {
     expect(screen.getByText(/Synthetic demo data/)).toBeInTheDocument()
   })
 
-  it('selecting a demo account only fills the email', async () => {
+  it('clicking a demo button fills the email, shows dots, logs in and opens the app', async () => {
+    let body: unknown
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => (release = resolve))
+
+    server.use(
+      mswHttp.post('*/api/v1/auth/demo-login', async ({ request }) => {
+        body = await request.json()
+        await gate
+
+        return HttpResponse.json({ success: true, data: { token: 'demo-tok', user: demoUser('WAREHOUSE_MANAGER') } })
+      }),
+    )
     renderApp(<AppRoutes />, { route: '/login' })
 
-    await userEvent.click(screen.getByRole('button', { name: /Warehouse manager/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Warehouse manager/ }))
 
     expect(screen.getByLabelText('Email')).toHaveValue('warehouse@demo.synthetic')
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
+    expect(screen.getByLabelText('Password')).toHaveValue('••••••••••••')
+    expect(screen.getByRole('button', { name: /Warehouse manager/ })).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('button', { name: /Viewer/ })).toBeDisabled()
+
+    release()
+
+    await waitFor(() => expect(screen.getByRole('navigation', { name: 'Main' })).toBeInTheDocument())
+    expect(body).toEqual({ role: 'WAREHOUSE_MANAGER' })
+    expect(tokenStore.get()).toBe('demo-tok')
+  })
+
+  it('shows a clear error when demo login fails and clears the dots', async () => {
+    server.use(mswHttp.post('*/api/v1/auth/demo-login', () => HttpResponse.json({ success: false, message: 'Not found' }, { status: 404 })))
+    renderApp(<AppRoutes />, { route: '/login' })
+
+    await userEvent.click(await screen.findByRole('button', { name: /Viewer/ }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Demo login is not available on this server.')
     expect(screen.getByLabelText('Password')).toHaveValue('')
+    expect(tokenStore.get()).toBeNull()
+    expect(screen.getByRole('button', { name: /Viewer/ })).toBeEnabled()
+  })
+
+  it('hides the whole demo panel when the server reports demo login is disabled', async () => {
+    demoStatus(false)
+    renderApp(<AppRoutes />, { route: '/login' })
+
+    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Demo accounts')).not.toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /Warehouse manager/ })).not.toBeInTheDocument()
+  })
+
+  it('hides the demo panel when the status call fails', async () => {
+    server.use(mswHttp.get('*/api/v1/auth/demo-status', () => HttpResponse.json({ success: false }, { status: 500 })))
+    renderApp(<AppRoutes />, { route: '/login' })
+
+    expect(await screen.findByRole('button', { name: 'Log in' })).toBeInTheDocument()
+    expect(screen.queryByText('Demo accounts')).not.toBeInTheDocument()
   })
 
   it('keeps the button off until both fields are filled', async () => {

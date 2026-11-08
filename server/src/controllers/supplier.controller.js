@@ -54,11 +54,11 @@ const updateSupplier = async (req, res) => {
 const deleteSupplier = async (req, res) => {
   const id = Number(req.params.id);
 
-  await supplierService.deleteSupplier(id);
+  await supplierService.deactivateSupplier(id);
 
   res.json({
     success: true,
-    message: "Supplier deleted successfully",
+    message: "Supplier deactivated successfully",
   });
 };
 

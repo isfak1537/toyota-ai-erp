@@ -70,7 +70,7 @@ http.interceptors.response.use(
   (error: AxiosError<{ message?: string; errors?: { field?: string; message: string }[] }>) => {
     const status = error.response?.status ?? 0
     const body = error.response?.data
-    const isLogin = error.config?.url?.endsWith('/auth/login')
+    const isLogin = error.config?.url?.endsWith('/auth/login') || error.config?.url?.endsWith('/auth/demo-login')
 
     if (status === 401 && !isLogin) {
       tokenStore.clear()

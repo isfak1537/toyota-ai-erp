@@ -1,4 +1,4 @@
-const { ConflictError, NotFoundError, ValidationError } = require("../errors/app-error");
+const { ConflictError, NotFoundError } = require("../errors/app-error");
 const prisma = require("../config/prisma");
 
 const supplierProductRepository = require(
@@ -23,7 +23,7 @@ const createSupplierProduct = async (data) => {
   }
 
   if (!supplier.isActive) {
-    throw new ValidationError(
+    throw new ConflictError(
       "Cannot link an inactive supplier"
     );
   }
@@ -37,7 +37,7 @@ const createSupplierProduct = async (data) => {
   }
 
   if (!product.isActive) {
-    throw new ValidationError(
+    throw new ConflictError(
       "Cannot link an inactive product"
     );
   }
