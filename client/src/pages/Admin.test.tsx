@@ -9,7 +9,7 @@ import type { AuditEntry, ModelRun, Role } from '../api/types'
 
 const page = (n: number) => ({ pagination: { page: 1, pageSize: 25, total: n, totalPages: 1 } })
 
-const forecast: ModelRun = { id: 2, modelType: 'FORECAST', version: 'forecast-20261101-abc', isActive: true, trainedAt: '2026-11-02T10:00:00Z', metrics: { as_of: '2026-11-01T00:00:00', overall: { baseline: { macro_mae: 1.536, series: 26 }, policy: { macro_mae: 1.317, series: 26 } } } }
+const forecast: ModelRun = { id: 2, modelType: 'FORECAST', version: 'forecast-20261101-abc', isActive: true, trainedAt: '2026-11-02T10:00:00Z', metrics: { as_of: '2026-11-01T00:00:00', holdout_start: '2026-10-19T00:00:00', holdout_end: '2026-11-01T00:00:00', holdout_days: 14, policy_ml: 24, policy_baseline: 2, overall: { baseline: { macro_mae: 1.418, series: 26 }, policy: { macro_mae: 1.216, series: 26 } } } }
 const anomaly: ModelRun = { id: 3, modelType: 'ANOMALY', version: 'anomaly-20261101-def', isActive: true, trainedAt: '2026-11-02T10:00:01Z', metrics: { as_of: '2026-11-01T00:00:00', transactions: 2986, eligible_transactions: 2767, flagged: 150 } }
 const old: ModelRun = { id: 1, modelType: 'FORECAST', version: 'forecast-old', isActive: false, trainedAt: '2026-10-01T10:00:00Z', metrics: { as_of: '2026-10-01' } }
 
@@ -21,9 +21,14 @@ describe('AI models page (admin)', () => {
     renderApp(<AppRoutes />, { route: '/admin/models', role: 'ADMIN' })
 
     const card = (await screen.findByText('Demand forecast model')).closest('section')!
-    expect(within(card).getByText('1.54')).toBeInTheDocument() // baseline MAE
-    expect(within(card).getByText('1.32')).toBeInTheDocument() // model in use
+    expect(within(card).getByText('1.42')).toBeInTheDocument() // baseline MAE
+    expect(within(card).getByText('1.22')).toBeInTheDocument() // model in use
     expect(within(card).getByText(/synthetic data/)).toBeInTheDocument()
+    // the figures are labelled so they cannot be mistaken for the report's (which averages only the series that have an ML forecast)
+    expect(within(card).getByText('Baseline error (MAE, units/day)')).toHaveAttribute('title', expect.stringContaining('Every series counts equally'))
+    expect(within(card).getByText('26 (24 with ML, 2 baseline only)')).toBeInTheDocument()
+    expect(within(card).getByText(/to .* \(14 days\)/)).toBeInTheDocument()
+    expect(within(card).getByText(/the evaluation report averages only series with an ML forecast/)).toBeInTheDocument()
     const anomalyCard = screen.getByText('Anomaly model').closest('section')!
     expect(within(anomalyCard).getByText('2,986')).toBeInTheDocument()
     expect(screen.getByText('Superseded')).toBeInTheDocument()

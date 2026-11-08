@@ -74,9 +74,15 @@ the slow test `test_re_executing_the_notebooks_reproduces_the_committed_text_out
 * **Anomalies, 8 injected (`server/prisma/seed/anomaly-labels.json`, count 8):** rules R1-R5 find **7 of 8**, the weekly review queue
   (top 10 per week) finds **6 of 8**, together **8 of 8**. Cost: **147 flags, so 139 false flags**, combined precision **0.054**
   (8 / 147); before the second pass it was 33 flags and precision 0.182. The report states the thresholds were not tuned on 8 labels.
-* The Models page of the dev database shows other figures (baseline 1.42, model 1.22, 26 series; 2,986 movements, 150 flagged)
-  because the dev database holds two more series and some later movements than the committed fixture; those are a different
-  training run, not a contradiction. Quote the report's numbers for the evaluation.
+* **Models page (baseline 1.42, model 1.22) versus the report (baseline 1.536, ML 1.317): the same run, a different average.** Both are
+  the forecast model `forecast-20261101-6d681afd`, the same metric (mean absolute error in units per day, every series counting
+  equally), the same 14-day holdout (2026-10-19 to 2026-11-01), the same 24,120 training samples. The Models page averages all **26**
+  series the dev database evaluated; the report averages the **24** that have an ML forecast. The other two (product 7 in warehouses 1
+  and 3) have no ML forecast (too little history) and an error of 0 for both models, so they only pull the means down:
+  1.536 x 24/26 = 1.418 and 1.317 x 24/26 = 1.216. Recomputing from the stored per-series errors over the 24 gives exactly 1.536 and
+  1.317, and the improvement is 14.3% either way. (An earlier version of this note said the dev database was a different training run;
+  that was wrong.) On 2026-11-09 the Models page labels were changed to say this (units, "Series averaged: 26 (24 with ML, 2 baseline
+  only)", the holdout dates, a tooltip on each figure). No model result was changed. Quote the report's numbers for the evaluation.
 
 ## PRD 12.1 MVP demo acceptance
 
@@ -200,4 +206,4 @@ the slow test `test_re_executing_the_notebooks_reproduces_the_committed_text_out
 * **Fixed on 2026-11-09:** the floating "Ask the assistant" button covered the right-hand "Details", "Receive goods…" and "Next" buttons of table rows on
   the anomaly, audit-log and procurement pages at every scroll position. The launcher is now a button in the menu (a row on a phone), and
   `client/e2e/assistant-overlap.spec.ts` fails if any element on any page is covered.
-* The Models page and the evaluation report show different MAE figures because they are different data (see above).
+* The Models page and the evaluation report average over different sets of series (26 versus 24), not different data or runs (see above); the page labels now say so.
