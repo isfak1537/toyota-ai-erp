@@ -25,6 +25,17 @@ describe('app shell', () => {
     expect(screen.getByText(/nothing is real company data/)).toBeInTheDocument()
   })
 
+  it('puts the assistant launcher in the menu, not floating over the page content', async () => {
+    renderApp(<AppRoutes />, { role: 'VIEWER' })
+
+    const nav = await screen.findByRole('navigation', { name: 'Main' })
+    const launcher = within(nav).getByRole('button', { name: /Ask the assistant/ })
+
+    expect(screen.getAllByRole('button', { name: /Ask the assistant/ })).toHaveLength(1)
+    expect(launcher.closest('main')).toBeNull()
+    expect(document.querySelector('.assistant-fab')).toBeNull()
+  })
+
   it('logging out returns to the login page and clears the token', async () => {
     renderApp(<AppRoutes />, { role: 'ADMIN' })
 
