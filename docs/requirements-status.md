@@ -18,7 +18,7 @@ the requirement was checked; where a requirement has a part no test covers, the 
 
 | Check | Result |
 |---|---|
-| Full suites at the end of the pass | server `npm test` 745 passed (57 suites); client 208 passed, lint and build clean; ai-service 388 passed (+1 slow notebook test, passed earlier in this pass) |
+| Full suites at the end of the pass | server `npm test` 745 passed (57 suites) on 2026-11-07, 858 passed (59 suites, `--runInBand`) on 2026-11-09; client 208 passed on 2026-11-07, 212 on 2026-11-09, lint and build clean; Playwright smoke, accessibility, demo-login and overlap checks 18 passed on 2026-11-09; ai-service 388 passed (+1 slow notebook test, passed earlier in this pass) |
 | Role matrix, nine actions, four roles and no token | all as the SRS matrix says (table below) |
 | Procure-to-stock loop through the API, then reconcile | passes; reconcile `Result: OK (0 errors, 0 warnings)` on the test database |
 | LLM key unset, and LLM rejecting every call | whole loop, explanation endpoint and assistant keep working; explanations are null / "Explanation unavailable" |
@@ -92,10 +92,10 @@ the slow test `test_re_executing_the_notebooks_reproduces_the_committed_text_out
 
 | ID | Status | Evidence / what is missing | Date |
 |---|---|---|---|
-| FR-001 | Not verified | Only the role and 401/403 behaviour of the company, factory and warehouse routes is tested (`integration/route-access.test.js`); no test creates, updates or deactivates them. | 2026-11-07 |
-| FR-002 | Not verified | Product routes appear in `route-access.test.js`, `replenishment.test.js` and `prisma-errors.test.js`; no test of product master-data maintenance as such. | 2026-11-07 |
-| FR-003 | Not verified | Supplier routes tested only for roles (`route-access.test.js`). | 2026-11-07 |
-| FR-004 | Not verified | Supplier-product routes tested only for roles; the AI-005 tests read supplier-product rows. | 2026-11-07 |
+| FR-001 | Verified by test | `integration/master-data-api.test.js`: create, read, update and deactivate companies, factories and warehouses; 400 invalid, 409 duplicate code (per company / per factory), 404 unknown id or parent, 401, 403 by role. | 2026-11-09 |
+| FR-002 | Verified by test | `integration/master-data-api.test.js`: SKU, optional barcode, unit, price and stock-control attributes; list, search and active filter; update, deactivate; 400 (price, unit, stock levels, max below min), 409 duplicate SKU or barcode, 404, 401, 403. | 2026-11-09 |
+| FR-003 | Verified by test | `integration/master-data-api.test.js`: profile create, update, deactivate and reactivate; 400, 409 duplicate code, 404, 401, 403. Found and fixed while writing it: `DELETE /suppliers/:id` always answered 500 (the controller called a service function that does not exist). | 2026-11-09 |
+| FR-004 | Verified by test | `integration/master-data-api.test.js`: supplier SKU, unit price, lead time, MOQ, one preferred supplier per product (create and update); 400, 409 duplicate link and inactive supplier or product, 404, 401, 403. Found and fixed while writing it: the routes had no Zod validation (a zero or negative price was accepted), and an inactive supplier or product answered 400 instead of 409. | 2026-11-09 |
 | FR-005 | Verified by test | `integration/stock-writes.test.js` (create inventory, duplicate 409), `inventory-constraints.test.js`, `review-fixes.test.js`; `docs/screenshots/verify/dashboard.png`. | 2026-11-07 |
 | FR-006 | Verified by test | `stock-writes.test.js` (RECEIPT row with new balance), `concurrency-issue-receive.test.js`, `procure-to-stock-loop.test.js`. | 2026-11-07 |
 | FR-007 | Verified by test | `stock-writes.test.js` (insufficient stock 409), `concurrency-issue-receive.test.js`. | 2026-11-07 |
@@ -138,14 +138,14 @@ the slow test `test_re_executing_the_notebooks_reproduces_the_committed_text_out
 
 | ID | Status | Evidence / what is missing | Date |
 |---|---|---|---|
-| UI-001 | Verified by test | `client/src/pages/Login.test.tsx`, `client/e2e/smoke.spec.ts` (login, logout, wrong password, deep link blocked); `integration/auth.test.js` (JWT). | 2026-11-07 |
+| UI-001 | Verified by test | `client/src/pages/Login.test.tsx` (including the one-click demo buttons and the disabled state), `client/e2e/smoke.spec.ts` (login, logout, wrong password, deep link blocked), `client/e2e/demo-login.spec.ts` (each demo button, menu per role); `integration/auth.test.js` (JWT), `integration/demo-login.test.js` (`POST /auth/demo-login`, `GET /auth/demo-status`: enabled, disabled 404, invalid role 400, no password in any response). | 2026-11-09 |
 | UI-002 | Verified by test | `client/src/pages/Dashboard.test.tsx`; `docs/screenshots/verify/dashboard.png` (on hand, reserved, available, reorder level, days of cover, low-stock highlight). | 2026-11-07 |
 | UI-003 | Verified by test | `client/src/pages/Forecast.test.tsx`; `docs/screenshots/verify/forecast.png` (90 days of history, baseline, ML, MAE 2.71 vs 1.71 for that series). | 2026-11-07 |
 | UI-004 | Verified by test | `client/src/pages/Suggestions.test.tsx`; `docs/screenshots/verify/suggestions.png`, `suggestions-review.png`. | 2026-11-07 |
 | UI-005 | Verified by test | `client/src/pages/Anomalies.test.tsx`; `docs/screenshots/verify/anomalies-rules.png`, `anomalies-queue.png` (separate tabs). | 2026-11-07 |
 | UI-006 | Verified by test | `client/src/pages/Procurement.test.tsx`; screenshots `procurement-requisitions.png`, `procurement-orders.png`, `procurement-receipts.png`. | 2026-11-07 |
 | UI-007 | Verified by test | `client/src/pages/Ledger.test.tsx`; `docs/screenshots/verify/ledger.png`; `integration/ui-endpoints.test.js` (date filters). | 2026-11-07 |
-| UI-008 | Verified by test | `client/src/components/AssistantPanel.test.tsx`; `client/e2e/smoke.spec.ts` ("the assistant answers from the system data"). | 2026-11-07 |
+| UI-008 | Verified by test | `client/src/components/AssistantPanel.test.tsx`; `client/src/components/Layout.test.tsx` (launcher is in the menu, not floating); `client/e2e/smoke.spec.ts` ("the assistant answers from the system data"); `client/e2e/assistant-overlap.spec.ts` (nothing on any page is covered by another element, desktop and phone). | 2026-11-09 |
 | UI-009 | Verified by test | `client/src/components/ui.test.tsx` and the empty-state tests in the page test files; empty-state coverage was listed on 2026-11-06 (see the P7 report). | 2026-11-07 |
 | AUTH-001 | Verified by test | `integration/auth.test.js` (bcrypt hash, 401 for missing, forged, expired and unsigned tokens, 429 limiter), `verification-roles.test.js` (403 by role). | 2026-11-07 |
 | AUTH-002 | Verified by test | `integration/actor-attribution.test.js`, `suggestion-decisions.test.js`, `procure-to-stock-loop.test.js`. | 2026-11-07 |
@@ -154,7 +154,7 @@ the slow test `test_re_executing_the_notebooks_reproduces_the_committed_text_out
 
 | ID | Status | Evidence / what is missing | Date |
 |---|---|---|---|
-| NFR-001 | Verified by test, in part | Hashing, authentication, authorization and validation: `auth.test.js`, `route-access.test.js`, `validation.test.js`. "Secrets never committed": on 2026-11-07 no `.env` is tracked and a search of tracked files for Groq, Google and OpenAI-style key patterns found nothing; that is a pattern search, not a full secret scan. | 2026-11-07 |
+| NFR-001 | Verified by test, in part | Hashing, authentication, authorization and validation: `auth.test.js`, `route-access.test.js`, `validation.test.js`. "Secrets never committed": on 2026-11-07 no `.env` is tracked and a search of tracked files for Groq, Google and OpenAI-style key patterns found nothing; on 2026-11-09 a full gitleaks 8.30.1 scan of all history (114 commits) and of the working tree (tracked and untracked files, `.gitignore`d files such as `.env` left out) found 2 hits, both false positives: a placeholder shared secret hard-coded for a local in-process test client in `ai-service/scripts/measure_bundle.py` (not a credential, and the literal appears nowhere else in tracked files). | 2026-11-09 |
 | NFR-002 | Verified by test | `integration/inventory-constraints.test.js` (CHECK constraints), `validation.test.js`. | 2026-11-07 |
 | NFR-003 | Verified by test | `concurrency-*.test.js` (issue, receive, adjust, reserve/release, transfer, goods receipt, PO cap), `review-fixes.test.js`. | 2026-11-07 |
 | NFR-004 | Verified by test | `actor-attribution.test.js`, AI audit log (`ui-endpoints.test.js`); `docs/screenshots/verify/audit.png`. | 2026-11-07 |
@@ -193,11 +193,11 @@ the slow test `test_re_executing_the_notebooks_reproduces_the_committed_text_out
 | D-05 | Verified by test | `unit/error-middleware.test.js`, `integration/prisma-errors.test.js`. | 2026-11-07 |
 | D-06 | Verified by test | `integration/procurement-money.test.js`. | 2026-11-07 |
 | D-07 | Verified by test | `integration/validation.test.js`, `pagination.test.js`. | 2026-11-07 |
-| D-08 | Not verified | Authentication, tests and a filled README (9.8 KB) exist, there is no stray root `src/` folder. **Not resolved:** `server/prisma/migrations/20261003000000_phase_a_database_foundation/migration.sql` is a 32-byte file next to the real `20261002202429_phase_a_database_foundation`. It has been applied on existing databases, so it was left alone; removing it needs an owner decision. | 2026-11-07 |
+| D-08 | Accepted | Authentication, tests and a filled README exist and there is no stray root `src/` folder; the one leftover, the 32-byte duplicate migration `20261003000000_phase_a_database_foundation`, is **accepted** because it is already applied on existing databases and deleting an applied migration would make `migrate deploy` fail there. | 2026-11-09 |
 
 ## Observations from the page screenshots (not requirement failures)
 
-* The floating "Ask the assistant" button sits over the right-hand "Details" button of a table row in the anomaly queue
-  screenshot (`anomalies-queue.png`, row 4). It is a fixed button on a full-page capture, but on a real long table it can also cover the
-  last column's action while that row is at the bottom-right of the window.
+* **Fixed on 2026-11-09:** the floating "Ask the assistant" button covered the right-hand "Details", "Receive goods…" and "Next" buttons of table rows on
+  the anomaly, audit-log and procurement pages at every scroll position. The launcher is now a button in the menu (a row on a phone), and
+  `client/e2e/assistant-overlap.spec.ts` fails if any element on any page is covered.
 * The Models page and the evaluation report show different MAE figures because they are different data (see above).
