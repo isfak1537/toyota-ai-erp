@@ -23,8 +23,8 @@ npm run e2e          # smoke test + automated accessibility check (read-only)
 npm run screenshots  # regenerates docs/screenshots/*.png
 ```
 
-`e2e/demo-login.spec.ts` clicks each demo button, so the API must be started with `DEMO_LOGIN_ENABLED=true` as a process
-variable (for example `DEMO_LOGIN_ENABLED=true npm run dev` in `server/`); never write it to a shared `.env` for a public host.
+`e2e/demo-login.spec.ts` clicks each demo button, so the API must have demo login on. It is on by default outside production; if
+you set `DEMO_LOGIN_ENABLED=false`, pass `DEMO_LOGIN_ENABLED=true` as a process variable instead. Never write it to a shared `.env` for a public host.
 
 The API limits login attempts to 10 per 15 minutes per user and address. The specs log in once per role
 and page set; if you rerun them many times in a row, restart the API to clear the limit.

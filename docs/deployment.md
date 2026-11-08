@@ -45,7 +45,7 @@ variable that this page does not mention.
 | `JWT_EXPIRES_IN` | no | Token lifetime, default `8h`. |
 | `CLIENT_URL` | yes | Browser origin(s) allowed to call the API: the client's URL, or several separated by commas. |
 | `TRUST_PROXY` | yes on hosts | `1` behind Vercel, so each client has its own login-attempt budget. Leave empty on a bare server. |
-| `DEMO_LOGIN_ENABLED` | no | `true` shows the one-click demo login buttons and enables `POST /api/v1/auth/demo-login`, which signs in as a seeded demo user **without a password**. For local use and the manager demo only. **Set it to `false` (or leave it unset) for any public URL.** Unset means off. |
+| `DEMO_LOGIN_ENABLED` | no | Shows the one-click demo login buttons and enables `POST /api/v1/auth/demo-login`, which signs in as a seeded demo user **without a password**. Unset or empty: **on** when `NODE_ENV` is not `production`, **off** in production. `true` or `false` overrides that either way. For local use and the manager demo only: on any public URL make sure `NODE_ENV=production` **and** set it to `false` explicitly, so a missing `NODE_ENV` can never turn it on. |
 | `PORT` | no | Local development only (default 5001). |
 | `AI_SERVICE_URL` | yes | URL of the AI service, for example `https://toyota-erp-ai-service.onrender.com`. |
 | `AI_SERVICE_SECRET` | yes | The shared secret; **must equal** the AI service's. At least 16 characters. |
@@ -166,7 +166,7 @@ The checklist with exact clicks is `docs/release-checklist.md`. In short:
 3. Vercel, ERP API (root `server`): environment variables of section 1; deploy; check `/api/v1/auth/me` answers 401.
 4. Vercel, client (root `client`): `VITE_API_URL` = the API's URL; deploy.
 5. Put the client's URL into the API's `CLIENT_URL` and redeploy the API (CORS).
-6. Check `DEMO_LOGIN_ENABLED` is `false` or unset on the public API (`GET /api/v1/auth/demo-status` answers `{"enabled": false}`, and `POST /api/v1/auth/demo-login` answers 404). Then smoke test: log in as each role, run replenishment, ask the assistant a question.
+6. Check `DEMO_LOGIN_ENABLED` is `false` (and `NODE_ENV` is `production`) on the public API (`GET /api/v1/auth/demo-status` answers `{"enabled": false}`, and `POST /api/v1/auth/demo-login` answers 404). Then smoke test: log in as each role, run replenishment, ask the assistant a question.
 
 ## 5. Known limits of the hosted setup
 

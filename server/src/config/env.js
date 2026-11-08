@@ -106,9 +106,14 @@ const env = {
     };
   },
 
-  // One-click demo login (POST /auth/demo-login). Off unless exactly "true"; must stay off on any public deployment.
+  // One-click demo login (POST /auth/demo-login). DEMO_LOGIN_ENABLED=true/false decides when it is set; when it is unset or empty
+  // the default is on outside production and off in production. It signs in without a password: keep it off on any public deployment.
   get demoLoginEnabled() {
-    return (process.env.DEMO_LOGIN_ENABLED || "").trim().toLowerCase() === "true";
+    const value = (process.env.DEMO_LOGIN_ENABLED || "").trim().toLowerCase();
+
+    if (value === "") return process.env.NODE_ENV !== "production";
+
+    return value === "true";
   },
 
   get jwtExpiresIn() {

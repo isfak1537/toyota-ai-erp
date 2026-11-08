@@ -16,7 +16,7 @@ over-stocked one.
 4. **Run replenishment once** as the procurement officer, and **score anomalies once** as the warehouse manager
    (*Score recent movements*), so the lists are full and the explanations are written.
 5. **Open three private windows**, one per person, logged in as: procurement officer, warehouse manager, administrator.
-   On the login page, click the role's button (needs `DEMO_LOGIN_ENABLED=true` on the API; the buttons are hidden otherwise,
+   On the login page, click the role's button (on by default when the API runs outside production, or with `DEMO_LOGIN_ENABLED=true`; the buttons are hidden otherwise,
    and you type the password instead). Demo login is for local use and the manager demo only: set `DEMO_LOGIN_ENABLED=false`
    for any public URL. The API allows 10 password logins per account per 15 minutes and 30 demo logins per address; do not log in repeatedly.
 6. Questions typed into the assistant are stored in the AI audit log (up to 500 characters). Use only the demo's own

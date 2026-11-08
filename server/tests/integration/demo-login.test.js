@@ -67,20 +67,11 @@ describe("POST /auth/demo-login (enabled)", () => {
 
     expect(res.status).toBe(404);
   });
-
-  it("is rate limited per address (429)", async () => {
-    let last;
-
-    for (let i = 0; i < 31; i += 1) last = await demoLogin({ role: "VIEWER" });
-
-    expect(last.status).toBe(429);
-  });
 });
 
 describe("POST /auth/demo-login (disabled)", () => {
-  it.each([undefined, "", "false", "1", "yes"])("answers 404 and no token when DEMO_LOGIN_ENABLED is %j", async (value) => {
-    if (value === undefined) delete process.env.DEMO_LOGIN_ENABLED;
-    else process.env.DEMO_LOGIN_ENABLED = value;
+  it.each(["false", "FALSE", "1", "yes"])("answers 404 and no token when DEMO_LOGIN_ENABLED is %j, even outside production", async (value) => {
+    process.env.DEMO_LOGIN_ENABLED = value;
 
     const res = await demoLogin({ role: "ADMIN" });
 
@@ -92,6 +83,51 @@ describe("POST /auth/demo-login (disabled)", () => {
     process.env.DEMO_LOGIN_ENABLED = "false";
 
     expect((await demoLogin({ role: "nope" })).status).toBe(404);
+  });
+});
+
+describe("default when DEMO_LOGIN_ENABLED is unset or empty", () => {
+  const status = async () => (await request(app).get("/api/v1/auth/demo-status")).body.data.enabled;
+
+  afterEach(() => {
+    process.env.NODE_ENV = "test";
+  });
+
+  it.each(["test", "development", undefined])("is on when NODE_ENV is %j", async (nodeEnv) => {
+    if (nodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = nodeEnv;
+
+    for (const unset of [undefined, "", "  "]) {
+      if (unset === undefined) delete process.env.DEMO_LOGIN_ENABLED;
+      else process.env.DEMO_LOGIN_ENABLED = unset;
+
+      expect(await status()).toBe(true);
+    }
+
+    delete process.env.DEMO_LOGIN_ENABLED;
+    expect((await demoLogin({ role: "VIEWER" })).status).toBe(200);
+  });
+
+  it("is off in production, and demo-login answers 404", async () => {
+    process.env.NODE_ENV = "production";
+
+    for (const unset of [undefined, ""]) {
+      if (unset === undefined) delete process.env.DEMO_LOGIN_ENABLED;
+      else process.env.DEMO_LOGIN_ENABLED = unset;
+
+      expect(await status()).toBe(false);
+      expect((await demoLogin({ role: "VIEWER" })).status).toBe(404);
+    }
+  });
+
+  it("true or false overrides the default in both environments", async () => {
+    for (const [nodeEnv, flag, expected] of [["production", "true", true], ["production", "false", false], ["development", "false", false], ["development", "true", true]]) {
+      process.env.NODE_ENV = nodeEnv;
+      process.env.DEMO_LOGIN_ENABLED = flag;
+
+      expect(await status()).toBe(expected);
+      expect((await demoLogin({ role: "VIEWER" })).status).toBe(expected ? 200 : 404);
+    }
   });
 });
 
@@ -107,5 +143,16 @@ describe("GET /auth/demo-status", () => {
 
     expect(off.status).toBe(200);
     expect(off.body.data).toEqual({ enabled: false });
+  });
+});
+
+// Last on purpose: it uses up the limiter's budget for this address.
+describe("POST /auth/demo-login (rate limit)", () => {
+  it("is rate limited per address (429)", async () => {
+    let last;
+
+    for (let i = 0; i < 31; i += 1) last = await demoLogin({ role: "VIEWER" });
+
+    expect(last.status).toBe(429);
   });
 });
