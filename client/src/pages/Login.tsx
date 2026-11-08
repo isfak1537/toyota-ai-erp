@@ -1,21 +1,25 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router'
-import { ApiError } from '../api/client'
+import { ApiError, get } from '../api/client'
+import type { Role } from '../api/types'
 import { useAuth } from '../auth/auth-context'
 import { Logo } from '../components/Logo'
 import { Banner, Button, Card } from '../components/ui'
 import { Footer } from '../components/Layout'
 
-// The demo accounts exist only in the synthetic demo database. Only their addresses are shown, never a password.
-const DEMO_ACCOUNTS = [
-  { email: 'admin@demo.synthetic', role: 'Administrator', note: 'everything, models, audit log' },
-  { email: 'procurement@demo.synthetic', role: 'Procurement officer', note: 'runs replenishment, approves suggestions' },
-  { email: 'warehouse@demo.synthetic', role: 'Warehouse manager', note: 'stock, receipts, anomaly review' },
-  { email: 'viewer@demo.synthetic', role: 'Viewer', note: 'read-only' },
+// One button per seeded demo user. The server signs the session in (POST /auth/demo-login); no password is stored or sent here.
+const DEMO_ACCOUNTS: { role: Role; label: string; email: string; note: string }[] = [
+  { role: 'ADMIN', label: 'Admin', email: 'admin@demo.synthetic', note: 'everything, models, audit log' },
+  { role: 'WAREHOUSE_MANAGER', label: 'Warehouse manager', email: 'warehouse@demo.synthetic', note: 'stock, receipts, anomaly review' },
+  { role: 'PROCUREMENT_OFFICER', label: 'Procurement officer', email: 'procurement@demo.synthetic', note: 'runs replenishment, approves suggestions' },
+  { role: 'VIEWER', label: 'Viewer', email: 'viewer@demo.synthetic', note: 'read-only' },
 ]
 
+// Shown in the password field while a demo login runs: dots only, it is not a real password and is never sent.
+const DEMO_PASSWORD_DOTS = '••••••••••••'
+
 export default function Login() {
-  const { status, login } = useAuth()
+  const { status, login, demoLogin } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/'
@@ -23,6 +27,23 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [demoEnabled, setDemoEnabled] = useState(false)
+  const [demoBusy, setDemoBusy] = useState<Role | null>(null)
+
+  // The panel stays hidden unless the server says demo login is on (and when the status call fails).
+  useEffect(() => {
+    let cancelled = false
+
+    get<{ enabled: boolean }>('/auth/demo-status')
+      .then((body) => {
+        if (!cancelled) setDemoEnabled(body.data.enabled === true)
+      })
+      .catch(() => undefined)
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   if (status === 'authenticated') return <Navigate to={from} replace />
 
@@ -39,6 +60,23 @@ export default function Login() {
       setError(e instanceof ApiError ? (e.status === 429 ? 'Too many attempts. Wait a few minutes and try again.' : e.message) : 'Could not log in.')
     } finally {
       setBusy(false)
+    }
+  }
+
+  const demo = async (account: (typeof DEMO_ACCOUNTS)[number]) => {
+    setError(null)
+    setEmail(account.email)
+    setPassword(DEMO_PASSWORD_DOTS)
+    setDemoBusy(account.role)
+
+    try {
+      await demoLogin(account.role)
+      navigate(from, { replace: true })
+    } catch (e) {
+      setPassword('')
+      setError(e instanceof ApiError ? (e.status === 404 ? 'Demo login is not available on this server.' : e.status === 429 ? 'Too many attempts. Wait a few minutes and try again.' : e.message) : 'Could not log in.')
+    } finally {
+      setDemoBusy(null)
     }
   }
 
@@ -60,7 +98,7 @@ export default function Login() {
         </section>
         <section className="login__panel">
           <div className="login__card stack">
-            <Card title="Log in" subtitle="Use a demo account. Ask the project owner for its password.">
+            <Card title="Log in" subtitle={demoEnabled ? 'Use a demo account below, or type your own credentials.' : 'Use a demo account. Ask the project owner for its password.'}>
               <form className="stack" onSubmit={(e) => void submit(e)} noValidate>
                 {error && <Banner tone="danger">{error}</Banner>}
                 <div className="field">
@@ -71,25 +109,27 @@ export default function Login() {
                   <label htmlFor="password">Password</label>
                   <input id="password" className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                 </div>
-                <Button type="submit" variant="primary" busy={busy} disabled={!email || !password}>
+                <Button type="submit" variant="primary" busy={busy} disabled={!email || !password || demoBusy !== null}>
                   Log in
                 </Button>
               </form>
             </Card>
-            <Card title="Demo accounts" subtitle="Select one to fill in the email.">
-              <div className="stack login__demo" style={{ gap: 8, marginTop: 0 }}>
-                {DEMO_ACCOUNTS.map((account) => (
-                  <Button key={account.email} className="btn--sm" onClick={() => setEmail(account.email)}>
-                    <span style={{ flex: 1, textAlign: 'left' }}>
-                      <strong>{account.role}</strong>
-                      <span className="muted"> · {account.email}</span>
-                      <br />
-                      <span className="faint">{account.note}</span>
-                    </span>
-                  </Button>
-                ))}
-              </div>
-            </Card>
+            {demoEnabled && (
+              <Card title="Demo accounts" subtitle="Click a role to sign in as that demo user. Synthetic data only.">
+                <div className="stack login__demo" style={{ gap: 8, marginTop: 0 }}>
+                  {DEMO_ACCOUNTS.map((account) => (
+                    <Button key={account.role} className="btn--sm" busy={demoBusy === account.role} disabled={demoBusy !== null || busy} onClick={() => void demo(account)}>
+                      <span style={{ flex: 1, textAlign: 'left' }}>
+                        <strong>{account.label}</strong>
+                        <span className="muted"> · {account.email}</span>
+                        <br />
+                        <span className="faint">{account.note}</span>
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </Card>
+            )}
           </div>
         </section>
       </div>

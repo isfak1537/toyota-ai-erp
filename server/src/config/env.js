@@ -106,6 +106,11 @@ const env = {
     };
   },
 
+  // One-click demo login (POST /auth/demo-login). Off unless exactly "true"; must stay off on any public deployment.
+  get demoLoginEnabled() {
+    return (process.env.DEMO_LOGIN_ENABLED || "").trim().toLowerCase() === "true";
+  },
+
   get jwtExpiresIn() {
     return process.env.JWT_EXPIRES_IN || "8h";
   },
