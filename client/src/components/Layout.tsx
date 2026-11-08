@@ -54,9 +54,11 @@ export function Layout() {
           </div>
         ))}
         {/* in the menu, not floating over the page: a floating button covers the right-hand action of table rows */}
-        <Button className="nav__assist" variant="ai" aria-expanded={assistantOpen} onClick={() => setAssistantOpen(true)}>
-          ✦ Ask the assistant
-        </Button>
+        {!assistantOpen && (
+          <Button className="nav__assist" variant="ai" onClick={() => setAssistantOpen(true)}>
+            ✦ Ask the assistant
+          </Button>
+        )}
         <div className="nav__user">
           <strong>{user?.name}</strong>
           {user && roleLabel[user.role]}

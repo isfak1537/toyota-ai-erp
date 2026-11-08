@@ -19,7 +19,8 @@
 .nav__link[aria-current="page"] { background: var(--color-nav-active); color: var(--color-nav-text-strong); }
 .nav__icon { width: 18px; text-align: center; opacity: 0.9; }
 .nav__assist { margin-top: auto; margin-bottom: var(--space-4); width: 100%; justify-content: center; }
-.nav__user { margin-top: 0; border-top: 1px solid var(--color-nav-border); padding: var(--space-4) var(--space-3) 0; font-size: var(--text-sm); }
+.nav__user { margin-top: auto; border-top: 1px solid var(--color-nav-border); padding: var(--space-4) var(--space-3) 0; font-size: var(--text-sm); }
+.nav__assist + .nav__user { margin-top: 0; }
 .nav__user strong { display: block; color: var(--color-nav-text-strong); font-weight: var(--weight-medium); }
 .nav__user button { margin-top: var(--space-3); }
 
@@ -60,7 +61,8 @@
   .nav__link { white-space: nowrap; padding: 8px 10px; }
   .nav__icon { display: none; }
   .nav__assist { margin: 0 0 0 auto; width: auto; flex: none; white-space: nowrap; }
-  .nav__user { margin: 0 0 0 var(--space-2); border: 0; padding: 0 0 0 var(--space-3); white-space: nowrap; }
+  .nav__user { margin: 0 0 0 auto; border: 0; padding: 0 0 0 var(--space-3); white-space: nowrap; }
+  .nav__assist + .nav__user { margin: 0 0 0 var(--space-2); }
   .nav__user strong, .nav__user div:not(:last-child) { display: none; }
   .nav__user button { margin-top: 0; }
   .main__inner, .topbar { padding-left: var(--space-4); padding-right: var(--space-4); }
