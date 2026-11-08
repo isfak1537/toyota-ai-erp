@@ -14,11 +14,28 @@ Status values:
 `docs/screenshots/verify/`) or the measurement. A test passing means the behaviour the test asserts holds, not that every sentence of
 the requirement was checked; where a requirement has a part no test covers, the status says so.
 
+## Changes since the 2026-11-07 verification (re-run 2026-11-09, branch `feat/demo-login`)
+
+Status changes:
+
+| ID | Was | Now | Why |
+|---|---|---|---|
+| FR-001 | Not verified | Verified by test | `integration/master-data-api.test.js` |
+| FR-002 | Not verified | Verified by test | same |
+| FR-003 | Not verified | Verified by test | same; `DELETE /suppliers/:id` 500 fixed |
+| FR-004 | Not verified | Verified by test | same; Zod validation added, inactive link now 409 |
+| D-08 | Not verified | Accepted | the empty duplicate migration is already applied on existing databases; left in place |
+
+Evidence changed, status unchanged: UI-001 (one-click demo login, `demo-login.test.js`, `demo-login.spec.ts`), UI-008 (launcher moved into the
+menu, `assistant-overlap.spec.ts`), NFR-001 (full gitleaks scan: 2 false positives; the rest of the row is unchanged, so it stays "in part"),
+AI-003 and NFR-013 (the Models page labels now state what each figure averages; no model result changed).
+Every other requirement is as listed on 2026-11-07; nothing was re-verified beyond the suites above.
+
 ## Results of this pass in one place
 
 | Check | Result |
 |---|---|
-| Full suites at the end of the pass | server `npm test` 745 passed (57 suites) on 2026-11-07, 858 passed (59 suites, `--runInBand`) on 2026-11-09; client 208 passed on 2026-11-07, 212 on 2026-11-09, lint and build clean; Playwright smoke, accessibility, demo-login and overlap checks 18 passed on 2026-11-09; ai-service 388 passed (+1 slow notebook test, passed earlier in this pass) |
+| Full suites at the end of the pass | 2026-11-07: server `npm test` 745 passed (57 suites), client 208, ai-service 388 (+1 slow), Playwright 12. **Re-run 2026-11-09 (current):** server 858 passed (59 suites, `--runInBand`), client 212 passed (19 files), lint and build clean, ai-service 388 passed + 1 slow notebook test passed, Playwright 20 passed (smoke 10, accessibility 2, demo login 4, overlap 2, page sweep 1, CSP 1) |
 | Role matrix, nine actions, four roles and no token | all as the SRS matrix says (table below) |
 | Procure-to-stock loop through the API, then reconcile | passes; reconcile `Result: OK (0 errors, 0 warnings)` on the test database |
 | LLM key unset, and LLM rejecting every call | whole loop, explanation endpoint and assistant keep working; explanations are null / "Explanation unavailable" |
