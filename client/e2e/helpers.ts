@@ -31,3 +31,11 @@ export async function settle(page: Page) {
   await page.waitForFunction(() => !document.querySelector('.spinner') && ![...document.querySelectorAll('.kpi__value')].some((el) => el.textContent === '…'))
   await page.mouse.move(2, 2) // no stray hover tooltips in screenshots
 }
+
+// The sidebar entries each role should (not) see.
+export const MENU: Record<DemoRole, { has: string[]; hasNot: string[] }> = {
+  ADMIN: { has: ['Inventory', 'Procurement', 'Stock ledger', 'AI suggestions', 'Anomalies', 'AI models', 'AI audit log'], hasNot: [] },
+  PROCUREMENT_OFFICER: { has: ['Inventory', 'Procurement', 'AI suggestions', 'Anomalies'], hasNot: ['AI models', 'AI audit log'] },
+  WAREHOUSE_MANAGER: { has: ['Inventory', 'Procurement', 'Stock ledger', 'Anomalies'], hasNot: ['AI models', 'AI audit log'] },
+  VIEWER: { has: ['Inventory', 'Procurement', 'Stock ledger', 'AI suggestions', 'Anomalies'], hasNot: ['AI models', 'AI audit log'] },
+}

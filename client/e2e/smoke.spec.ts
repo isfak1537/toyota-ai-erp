@@ -1,16 +1,9 @@
 import { expect, test } from '@playwright/test'
-import { ACCOUNTS, loginAs, settle, type DemoRole } from './helpers'
+import { ACCOUNTS, loginAs, MENU, settle, type DemoRole } from './helpers'
 
 // Read-only smoke test of the real stack: logins, role-based menus and actions, the assistant, logout.
 // (It asks the assistant one question, which writes one audit row; nothing else is written.)
 const nav = (page: import('@playwright/test').Page) => page.getByRole('navigation', { name: 'Main' })
-
-const MENU: Record<DemoRole, { has: string[]; hasNot: string[] }> = {
-  ADMIN: { has: ['Inventory', 'Procurement', 'Stock ledger', 'AI suggestions', 'Anomalies', 'AI models', 'AI audit log'], hasNot: [] },
-  PROCUREMENT_OFFICER: { has: ['Inventory', 'Procurement', 'AI suggestions', 'Anomalies'], hasNot: ['AI models', 'AI audit log'] },
-  WAREHOUSE_MANAGER: { has: ['Inventory', 'Procurement', 'Stock ledger', 'Anomalies'], hasNot: ['AI models', 'AI audit log'] },
-  VIEWER: { has: ['Inventory', 'Procurement', 'Stock ledger', 'AI suggestions', 'Anomalies'], hasNot: ['AI models', 'AI audit log'] },
-}
 
 for (const role of Object.keys(ACCOUNTS) as DemoRole[]) {
   test(`${role}: logs in, sees the right menu and the dashboard`, async ({ page }) => {
