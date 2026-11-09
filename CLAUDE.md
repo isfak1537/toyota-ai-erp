@@ -163,7 +163,7 @@ Keep `npm test` passing.
 - Auth is minimal (P4): JWT in the Authorization header, no refresh tokens, no logout endpoint (the client discards the token), no password change or user management API (users come from `npm run seed:users`), login attempts limited in memory per process.
 - Ledger rows written before P4 have `reservedAfter` NULL; reconcile only warns about those series. Re-run
   `npm run seed:synthetic -- --apply --replace` to refill the synthetic data with it.
-- `routes/category.routes.js` exists but is not mounted in `app.js` (categories have no API); mount it behind the master-data role if the UI needs it.
+- Categories have no API (the unmounted `category.*` files were removed in the cleanup pass; add them back behind the master-data role if the UI needs categories).
 - LLM daily cap counts audit rows (shared across instances); the per-minute window is per process.
 - Seed NEAR_ROP products sit near the seed `reorderLevel`, which is about 1.5x the AI reorder point (the seed uses the weekday base rate; the forecast uses recent average demand), so the AI suggests nothing for them. Open owner decision, see the P4 report: options are leaving it, a model-independent `reorderLevel` in the seed, or draining stock at demo time.
 - Two unexplained flaky runs of the Node suite were seen (one earlier, one in P4: failures in the route-access and transfer-pagination tests, green on the next runs). To capture one: `cd server && npm run test:loop -- 30` (add `--stop` to end at the first failure). Failing output goes to `~/erp-flaky-logs/<timestamp>-run<N>.log` with the commit, load and other node processes; send me that file.
