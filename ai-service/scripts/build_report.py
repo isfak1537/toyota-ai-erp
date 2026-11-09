@@ -51,7 +51,7 @@ def build() -> str:
     series = series_map(daily_demand(ledger, tz_offset_hours=6))
     forecast = evaluate_forecasting(series)
     s = forecast.summaries
-    b, m, sel, nested, naive = (s[k].macro_mae for k in ("baseline", "ml", "per_series_selection", "per_series_selection_nested", "seasonal_naive"))
+    b, _, sel, nested, naive = (s[k].macro_mae for k in ("baseline", "ml", "per_series_selection", "per_series_selection_nested", "seasonal_naive"))
     policy = s["policy"].macro_mae
     evaluated = forecast.per_series
     wins = sum(1 for e in evaluated.values() if e.mae_ml is not None and e.mae_ml < e.mae_baseline)

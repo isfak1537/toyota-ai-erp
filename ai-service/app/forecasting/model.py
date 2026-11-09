@@ -39,7 +39,6 @@ class GlobalDemandModel:
     estimator: HistGradientBoostingRegressor | None = None
     cutoff: pd.Timestamp | None = None
     n_samples: int = 0
-    n_series: int = 0
 
     def fit(self, series: Mapping[tuple[int, int], pd.Series], cutoff: pd.Timestamp | str) -> "GlobalDemandModel":
         """Train on days up to and including `cutoff` only."""
@@ -53,7 +52,6 @@ class GlobalDemandModel:
         self.estimator.fit(samples[FEATURE_NAMES], samples["y"])
         self.cutoff = pd.Timestamp(cutoff).normalize()
         self.n_samples = len(samples)
-        self.n_series = len(usable)
 
         return self
 
