@@ -35,7 +35,7 @@ Every other requirement is as listed on 2026-11-07; nothing was re-verified beyo
 
 | Check | Result |
 |---|---|
-| Full suites at the end of the pass | 2026-11-07: server `npm test` 745 passed (57 suites), client 208, ai-service 388 (+1 slow), Playwright 12. **Re-run 2026-11-09 (current):** server 862 passed (59 suites, `--runInBand`), client 212 passed (19 files), lint and build clean, ai-service 388 passed + 1 slow notebook test passed, Playwright 20 passed (smoke 10, accessibility 2, demo login 4, overlap 2, page sweep 1, CSP 1) |
+| Full suites at the end of the pass | 2026-11-07: server `npm test` 745 passed (57 suites), client 208, ai-service 388 (+1 slow), Playwright 12. **Re-run 2026-11-09 (current):** server 862 passed (59 suites, `--runInBand`), client 212 passed (19 files), lint and build clean, ai-service 388 passed + 1 slow notebook test passed, Playwright 20 passed (smoke 10, accessibility 2, demo login 4, overlap 2, page sweep 1, CSP 1). Unchanged after the 2026-11-09 cleanup pass (`chore/cleanup`): same counts, all green |
 | Role matrix, nine actions, four roles and no token | all as the SRS matrix says (table below) |
 | Procure-to-stock loop through the API, then reconcile | passes; reconcile `Result: OK (0 errors, 0 warnings)` on the test database |
 | LLM key unset, and LLM rejecting every call | whole loop, explanation endpoint and assistant keep working; explanations are null / "Explanation unavailable" |
