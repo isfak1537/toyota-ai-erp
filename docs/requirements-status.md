@@ -11,7 +11,7 @@ Status values:
 * **Out of scope**: the SRS marks it Later; not built for the MVP.
 
 "Evidence" names the test file (under `server/tests/`, `client/src/` or `ai-service/tests/`), the screenshot (under
-`docs/screenshots/verify/`) or the measurement. A test passing means the behaviour the test asserts holds, not that every sentence of
+`docs/screenshots/verify/`, not tracked in git: `cd client && npx playwright test e2e/verify-pages.spec.ts` regenerates them against the real stack) or the measurement. A test passing means the behaviour the test asserts holds, not that every sentence of
 the requirement was checked; where a requirement has a part no test covers, the status says so.
 
 ## Changes since the 2026-11-07 verification (re-run 2026-11-09, branch `feat/demo-login`)
