@@ -1,5 +1,5 @@
 // The anomaly rules (AI-008) in plain words. The codes come from the AI service.
-export const RULE_LABEL: Record<string, string> = {
+const RULE_LABEL: Record<string, string> = {
   R1: 'Large negative adjustment',
   R2: 'Quantity far above normal',
   R3: 'Outside business hours',

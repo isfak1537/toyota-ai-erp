@@ -155,7 +155,7 @@ export function DataState({ query, empty, children }: {
   return <>{children}</>
 }
 
-export interface TabDef {
+interface TabDef {
   id: string
   label: string
   count?: number

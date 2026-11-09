@@ -8,7 +8,7 @@ const listeners: Record<'unauthorized' | 'ai-unavailable' | 'ai-ok', Set<Listene
   'ai-ok': new Set(),
 }
 
-export type ApiEvent = keyof typeof listeners
+type ApiEvent = keyof typeof listeners
 
 export const onApiEvent = (event: ApiEvent, listener: Listener) => {
   listeners[event].add(listener)

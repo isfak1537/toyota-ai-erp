@@ -39,7 +39,7 @@ export const businessDayRange = (from?: string, to?: string) => ({
 })
 
 // How open purchase orders were matched to a warehouse (AI-004); plain words for the review screens
-export const ON_ORDER_METHOD_TEXT: Record<string, string> = {
+const ON_ORDER_METHOD_TEXT: Record<string, string> = {
   NONE: 'none',
   DESTINATION: 'matched by destination warehouse',
   DEMAND_SHARE: "share of orders without a destination warehouse, by this warehouse's demand",

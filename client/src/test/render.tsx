@@ -8,12 +8,12 @@ import { http as mswHttp, HttpResponse } from 'msw'
 import { server } from './server'
 import type { Role, User } from '../api/types'
 
-export const makeQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } })
+const makeQueryClient = () => new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } })
 
 export const demoUser = (role: Role = 'ADMIN'): User => ({ id: 1, name: `Demo ${role}`, email: `${role.toLowerCase()}@demo.synthetic`, role })
 
 // Registers /auth/me for a logged-in user and stores a token, like a reloaded session.
-export const signIn = (role: Role = 'ADMIN') => {
+const signIn = (role: Role = 'ADMIN') => {
   tokenStore.set('test-token')
   server.use(mswHttp.get('*/api/v1/auth/me', () => HttpResponse.json({ success: true, data: demoUser(role) })))
 }

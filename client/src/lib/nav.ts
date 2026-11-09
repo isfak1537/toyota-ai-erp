@@ -1,7 +1,7 @@
 import type { Role } from '../api/types'
 import { can, type Capability } from './permissions'
 
-export interface NavItem {
+interface NavItem {
   to: string
   label: string
   icon: string
@@ -10,7 +10,7 @@ export interface NavItem {
 }
 
 // One list drives the sidebar and what the role may open.
-export const NAV_ITEMS: NavItem[] = [
+const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Inventory', icon: '▦', section: 'Operations' },
   { to: '/procurement', label: 'Procurement', icon: '⇄', section: 'Operations' },
   { to: '/ledger', label: 'Stock ledger', icon: '☰', section: 'Operations' },
