@@ -88,7 +88,7 @@ def measure_install(python_version: str) -> dict:
 
 
 CHILD = r"""
-import json, resource, sys, time
+import json, os, resource, sys, time
 t0 = time.time()
 sys.path.insert(0, ".")
 from fastapi.testclient import TestClient
@@ -99,9 +99,9 @@ from app.registry import ModelRegistry
 import tempfile
 imported = time.time() - t0
 folder = tempfile.mkdtemp()
-settings = Settings.from_env({"AI_SERVICE_SECRET": "measure-secret-0123456789", "AI_MODEL_DIR": folder})
+settings = Settings.from_env({"AI_SERVICE_SECRET": os.environ["AI_SERVICE_SECRET"], "AI_MODEL_DIR": folder})
 client = TestClient(create_app(settings, source=CsvSource("tests/fixtures"), registry=ModelRegistry(settings.model_dir)))
-h = {"X-AI-Service-Secret": "measure-secret-0123456789"}
+h = {"X-AI-Service-Secret": os.environ["AI_SERVICE_SECRET"]}
 rss = lambda: resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / (1024 * 1024 if sys.platform == "darwin" else 1024)
 after_import = rss()
 t1 = time.time(); client.post("/train", json={}, headers=h); trained = time.time() - t1; after_train = rss()
@@ -124,6 +124,9 @@ def main() -> None:
     parser.add_argument("--python", default="3.13", help="target Python minor version for the wheels")
     parser.add_argument("--no-install", action="store_true", help="skip the download-heavy size measurement")
     args = parser.parse_args()
+
+    if not os.environ.get("AI_SERVICE_SECRET"):
+        sys.exit("Set AI_SERVICE_SECRET before running this script")
 
     report = {"memory_and_timing": measure_memory()}
 
