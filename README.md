@@ -11,6 +11,18 @@ stock movements and answers questions about the data. A person approves every pu
 | ![Inventory dashboard](docs/screenshots/01-dashboard.png) | ![AI suggestion with its inputs and explanation](docs/screenshots/03-suggestions.png) |
 | Inventory with days of cover, and the static reorder level next to the AI's | A suggestion: every input, the model version, an explanation labelled as AI-written |
 
+## Live demo
+
+* App (client): https://toyota-ai-erp-iun9.vercel.app
+* ERP API health: https://toyota-ai-erp.vercel.app/health
+* AI service health: https://toyota-ai-service.onrender.com/health (free tier: sleeps when idle, the first request takes about 1 minute)
+* Source: https://github.com/isfak1537/toyota-ai-erp
+
+Hosting: the client and the ERP API run on Vercel, the AI service on Render, and the database is Postgres on Neon.
+Groq is optional and only used to write explanations and answer assistant questions; the numbers never come from it.
+
+Login: the demo accounts are created by the seed (`npm run seed:users`). Their credentials are not published here; ask the author.
+
 ## What it does
 
 * **Inventory and ledger.** Stock per product and warehouse, atomic stock changes (no overselling under concurrent
@@ -159,4 +171,4 @@ Reconcile the stock ledger with the inventory at any time: `cd server && npm run
 | P2-P3 | AI service: forecasting, anomaly detection, evaluation | `m3-ai-models` |
 | P4-P5 | Auth, replenishment, approval, anomalies, LLM, assistant | `m4-ai-erp` |
 | P6 | React UI | `i7-ui` |
-| P7 | Release preparation: demo staging, deployment, documentation | branch `phase-7-release` |
+| P7 | Release preparation: demo staging, deployment, documentation | `i8-release` |
